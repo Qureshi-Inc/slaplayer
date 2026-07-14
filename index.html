@@ -764,14 +764,15 @@
                             fetch(`${SLAP_API}/artists`).then(r => r.json()).catch(() => ({ artists: [] })),
                         ]);
 
-                        this.slaptasticTracks = recentRes.tracks || recentRes || [];
-                        this.leaderboard = (leaderboardRes.leaderboard || leaderboardRes || []).map(item => ({
+                        this.slaptasticTracks = recentRes.items || recentRes.tracks || [];
+                        this.leaderboard = (leaderboardRes.entries || leaderboardRes.leaderboard || []).map(item => ({
                             username: item.username || item.user || item.name || 'Unknown',
-                            count: item.count || item.tracks || item.total || 0,
+                            count: item.song_count || item.count || item.tracks || 0,
+                            color: item.color || '#8b5cf6',
                         }));
-                        this.topArtists = (artistsRes.artists || artistsRes || []).map(item => ({
-                            name: item.artist || item.name || 'Unknown',
-                            count: item.count || item.tracks || 0,
+                        this.topArtists = (artistsRes.artists || []).map(item => ({
+                            name: item.name || item.artist || 'Unknown',
+                            count: item.count || 0,
                         }));
                     } catch (e) {
                         console.warn('Failed to load slaptastic data:', e);
