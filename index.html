@@ -119,8 +119,43 @@
 </head>
 <body class="h-full text-white overflow-hidden" x-data="app()" x-init="init()">
 
+    <!-- Login Screen -->
+    <div x-show="!authenticated" class="flex items-center justify-center h-full" x-transition>
+        <div class="glass p-8 rounded-2xl w-full max-w-sm mx-4 border border-white/10">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold gradient-text mb-2">SlapPlayer</h1>
+                <p class="text-sm text-white/50">Connect to your Jellyfin server</p>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs text-white/50 block mb-1">Server URL</label>
+                    <input x-model="loginForm.serverUrl" type="url" placeholder="https://jelly.qureshi.io"
+                        class="w-full px-4 py-3 bg-dark-700 rounded-xl border border-white/10 focus:border-accent-purple focus:outline-none text-sm">
+                </div>
+                <div>
+                    <label class="text-xs text-white/50 block mb-1">Username</label>
+                    <input x-model="loginForm.username" type="text" placeholder="moiz"
+                        class="w-full px-4 py-3 bg-dark-700 rounded-xl border border-white/10 focus:border-accent-purple focus:outline-none text-sm">
+                </div>
+                <div>
+                    <label class="text-xs text-white/50 block mb-1">Password</label>
+                    <input x-model="loginForm.password" type="password" placeholder="••••••••"
+                        @keyup.enter="login()"
+                        class="w-full px-4 py-3 bg-dark-700 rounded-xl border border-white/10 focus:border-accent-purple focus:outline-none text-sm">
+                </div>
+                <p x-show="loginError" class="text-red-400 text-xs" x-text="loginError"></p>
+                <button @click="login()" :disabled="loginLoading"
+                    class="w-full py-3 rounded-xl bg-gradient-to-r from-accent-purple to-accent-blue font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50">
+                    <span x-show="!loginLoading">Connect</span>
+                    <span x-show="loginLoading" class="animate-pulse">Connecting...</span>
+                </button>
+            </div>
+            <p class="text-xs text-white/30 text-center mt-6">Same login as Finamp / Jellyfin</p>
+        </div>
+    </div>
+
     <!-- Main Layout -->
-    <div class="flex flex-col h-full">
+    <div x-show="authenticated" class="flex flex-col h-full" x-transition>
 
         <!-- Top Navigation -->
         <nav class="glass border-b border-white/5 px-4 py-3 flex items-center justify-between z-50">
@@ -146,6 +181,9 @@
                 </button>
             </div>
             <div class="flex items-center gap-2">
+                <button @click="logout()" class="text-white/30 hover:text-white/60 transition-colors text-xs px-2" title="Logout">
+                    <i class="fas fa-right-from-bracket"></i>
+                </button>
                 <button @click="showQueue = !showQueue"
                     :class="showQueue ? 'text-accent-purple' : 'text-white/50 hover:text-white/80'"
                     class="p-2 transition-colors relative">
@@ -591,6 +629,14 @@
     <script>
         function app() {
             return {
+                // Auth
+                authenticated: false,
+                loginForm: { serverUrl: '', username: '', password: '' },
+                loginError: '',
+                loginLoading: false,
+                jellyfinUrl: '',
+                jellyfinToken: '',
+
                 // State
                 activeTab: 'discovery',
                 showQueue: false,
@@ -630,6 +676,71 @@
                 slaptasticTracks: [],
 
                 async init() {
+                    // Check for saved session
+                    const session = localStorage.getItem('slaplayer_session');
+                    if (session) {
+                        const s = JSON.parse(session);
+                        this.jellyfinUrl = s.serverUrl;
+                        this.jellyfinToken = s.token;
+                        this.loginForm.serverUrl = s.serverUrl;
+                        this.loginForm.username = s.username;
+                        this.authenticated = true;
+                        await this.loadApp();
+                    }
+                },
+
+                async login() {
+                    this.loginError = '';
+                    this.loginLoading = true;
+
+                    const url = this.loginForm.serverUrl.replace(/\/+$/, '');
+                    try {
+                        const res = await fetch(`${url}/Users/AuthenticateByName`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Emby-Authorization': 'MediaBrowser Client="SlapPlayer", Device="Browser", DeviceId="slaplayer-web", Version="1.0.0"',
+                            },
+                            body: JSON.stringify({
+                                Username: this.loginForm.username,
+                                Pw: this.loginForm.password,
+                            }),
+                        });
+
+                        if (!res.ok) {
+                            this.loginError = res.status === 401 ? 'Invalid username or password' : `Connection failed (${res.status})`;
+                            this.loginLoading = false;
+                            return;
+                        }
+
+                        const data = await res.json();
+                        this.jellyfinToken = data.AccessToken;
+                        this.jellyfinUrl = url;
+                        this.authenticated = true;
+
+                        // Save session
+                        localStorage.setItem('slaplayer_session', JSON.stringify({
+                            serverUrl: url,
+                            token: data.AccessToken,
+                            username: this.loginForm.username,
+                            userId: data.User?.Id,
+                        }));
+
+                        await this.loadApp();
+                    } catch (e) {
+                        this.loginError = 'Cannot connect to server. Check the URL.';
+                    }
+                    this.loginLoading = false;
+                },
+
+                logout() {
+                    localStorage.removeItem('slaplayer_session');
+                    this.authenticated = false;
+                    this.jellyfinToken = '';
+                    this.jellyfinUrl = '';
+                },
+
+                async loadApp() {
                     // Load reactions from localStorage
                     const saved = localStorage.getItem('slaplayer_reactions');
                     if (saved) this.reactions = JSON.parse(saved);
@@ -668,8 +779,8 @@
 
                 async loadJellyfinLibrary() {
                     try {
-                        const res = await fetch('/jelly/Items?IncludeItemTypes=Audio&Recursive=true&SortBy=DateCreated&SortOrder=Descending&Fields=DateCreated,MediaSources', {
-                            headers: { 'X-Emby-Token': 'ff64cc99f3dd46cbb9b2f264add3ceb3' }
+                        const res = await fetch(`${this.jellyfinUrl}/Items?IncludeItemTypes=Audio&Recursive=true&SortBy=DateCreated&SortOrder=Descending&Fields=DateCreated,MediaSources`, {
+                            headers: { 'X-Emby-Token': this.jellyfinToken }
                         });
                         const data = await res.json();
                         const items = data.Items || [];
@@ -693,9 +804,9 @@
                         duration: item.RunTimeTicks ? Math.floor(item.RunTimeTicks / 10000000) : 0,
                         dateAdded: item.DateCreated || '',
                         albumArt: item.ImageTags && item.ImageTags.Primary
-                            ? `/jelly/Items/${item.Id}/Images/Primary?maxHeight=300&api_key=ff64cc99f3dd46cbb9b2f264add3ceb3`
-                            : (item.AlbumId ? `/jelly/Items/${item.AlbumId}/Images/Primary?maxHeight=300&api_key=ff64cc99f3dd46cbb9b2f264add3ceb3` : ''),
-                        streamUrl: `/jelly/Audio/${item.Id}/universal?api_key=ff64cc99f3dd46cbb9b2f264add3ceb3&audioCodec=aac`,
+                            ? `${this.jellyfinUrl}/Items/${item.Id}/Images/Primary?maxHeight=300&api_key=${this.jellyfinToken}`
+                            : (item.AlbumId ? `${this.jellyfinUrl}/Items/${item.AlbumId}/Images/Primary?maxHeight=300&api_key=${this.jellyfinToken}` : ''),
+                        streamUrl: `${this.jellyfinUrl}/Audio/${item.Id}/universal?api_key=${this.jellyfinToken}&audioCodec=aac`,
                         username: null,
                     };
 
