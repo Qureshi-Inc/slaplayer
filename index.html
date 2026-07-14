@@ -862,7 +862,7 @@ function app() {
             const API = 'https://slap.qureshi.io/api/v1/dashboard';
             try {
                 const [recent, lb, artists] = await Promise.all([
-                    fetch(`${API}/recent`).then(r => r.json()).catch(() => ({})),
+                    fetch(`${API}/recent?limit=100`).then(r => r.json()).catch(() => ({})),
                     fetch(`${API}/leaderboard`).then(r => r.json()).catch(() => ({})),
                     fetch(`${API}/artists`).then(r => r.json()).catch(() => ({})),
                 ]);
@@ -923,7 +923,17 @@ function app() {
                 streamUrl: `${this.jellyfinUrl}/Audio/${item.Id}/universal?api_key=${this.jellyfinToken}&audioCodec=aac&Container=mp3,aac,m4a`,
                 username: null,
             };
-            const match = this.slaptasticTracks.find(st => (st.title || st.name || '').toLowerCase().trim() === track.title.toLowerCase().trim() && (st.artist || '').toLowerCase().trim() === track.artist.toLowerCase().trim());
+            const tTitle = track.title.toLowerCase().trim();
+            const tArtist = track.artist.toLowerCase().trim();
+            const match = this.slaptasticTracks.find(st => {
+                const stTitle = (st.title || st.name || '').toLowerCase().trim();
+                const stArtist = (st.artist || '').toLowerCase().trim();
+                // Exact match
+                if (stTitle === tTitle && stArtist === tArtist) return true;
+                // Title contains match (handles slight formatting differences)
+                if (stTitle && tTitle && (stTitle.includes(tTitle) || tTitle.includes(stTitle))) return true;
+                return false;
+            });
             if (match) track.username = match.username || match.user || null;
             return track;
         },
