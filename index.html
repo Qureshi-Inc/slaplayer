@@ -111,7 +111,7 @@
 
     <!-- Content -->
     <div class="flex-1 overflow-hidden flex relative">
-        <div class="flex-1 overflow-y-auto scrollbar-thin pb-20" :class="showQueue ? 'lg:mr-72' : ''">
+        <div class="flex-1 overflow-y-auto scrollbar-thin" :class="showQueue ? 'lg:mr-72' : ''">
 
             <!-- Discovery -->
             <div x-show="activeTab === 'discovery'" x-cloak class="p-4 space-y-5 fade-in">
@@ -216,106 +216,49 @@
             </div>
 
             <!-- Library -->
-            <div x-show="activeTab === 'library'" x-cloak class="p-4 fade-in">
-                <div class="flex gap-2 mb-3">
-                    <div class="flex-1 relative">
-                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm"></i>
-                        <input type="text" x-model="searchQuery" @input="filterLibrary()" placeholder="Search tracks, artists, albums..."
-                            class="w-full pl-9 pr-4 py-2.5 bg-dark-700 border border-white/5 rounded-xl text-sm placeholder-white/30 focus:outline-none focus:border-accent-purple/50">
+            <div x-show="activeTab === 'library'" x-cloak class="fade-in flex flex-col">
+                <!-- Sticky sub-navigation pills -->
+                <div class="sticky top-0 z-30 bg-dark-900/95 backdrop-blur-md px-4 pt-3 pb-2 border-b border-white/5">
+                    <div class="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
+                        <button @click="librarySubTab = 'songs'" :class="librarySubTab === 'songs' ? 'bg-accent-purple text-white' : 'bg-white/5 text-white/50 hover:text-white/80'" class="px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all">Songs</button>
+                        <button @click="librarySubTab = 'albums'" :class="librarySubTab === 'albums' ? 'bg-accent-purple text-white' : 'bg-white/5 text-white/50 hover:text-white/80'" class="px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all">Albums</button>
+                        <button @click="librarySubTab = 'artists'" :class="librarySubTab === 'artists' ? 'bg-accent-purple text-white' : 'bg-white/5 text-white/50 hover:text-white/80'" class="px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all">Artists</button>
+                        <button @click="librarySubTab = 'playlists'; if(playlists.length===0) loadPlaylists()" :class="librarySubTab === 'playlists' ? 'bg-accent-purple text-white' : 'bg-white/5 text-white/50 hover:text-white/80'" class="px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all">Playlists</button>
+                        <button @click="librarySubTab = 'genres'" :class="librarySubTab === 'genres' ? 'bg-accent-purple text-white' : 'bg-white/5 text-white/50 hover:text-white/80'" class="px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all">Genres</button>
                     </div>
-                    <select x-model="sortBy" @change="sortLibrary()" class="px-3 py-2.5 bg-dark-700 border border-white/5 rounded-xl text-sm text-white/70 focus:outline-none">
-                        <option value="dateAdded">Recent</option>
-                        <option value="title">Title</option>
-                        <option value="artist">Artist</option>
-                    </select>
                 </div>
-                <div class="flex items-center justify-between mb-2">
-                    <p class="text-xs text-white/30"><span x-text="filteredLibrary.length"></span> tracks</p>
-                    <button @click="playAllFiltered()" x-show="filteredLibrary.length > 0" class="text-xs px-3 py-1 rounded-full bg-accent-purple/20 text-accent-purple hover:bg-accent-purple/30 transition-colors">
-                        <i class="fas fa-play mr-1"></i> Play All
-                    </button>
-                </div>
-                <div class="space-y-0.5">
-                    <template x-for="track in filteredLibrary" :key="track.id">
-                        <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer transition-all group border border-transparent"
-                            :class="currentTrack && currentTrack.id === track.id ? 'border-accent-purple/20 bg-accent-purple/5' : ''"
-                            @click="playFromList(track, filteredLibrary)" @contextmenu.prevent="openEditModal(track)">
-                            <div class="w-9 h-9 rounded bg-dark-600 flex-shrink-0 overflow-hidden relative">
-                                <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover" loading="lazy">
-                                <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center"><i class="fas fa-music text-white/20 text-xs"></i></div>
-                                <template x-if="currentTrack && currentTrack.id === track.id && isPlaying">
-                                    <div class="absolute inset-0 bg-black/60 flex items-end justify-center gap-0.5 pb-1.5">
-                                        <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
-                                        <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
-                                        <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
-                                    </div>
-                                </template>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium truncate" x-text="track.title"></p>
-                                <p class="text-xs text-white/40 truncate" x-text="track.artist + (track.album ? ' • ' + track.album : '')"></p>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-[10px] text-white/20" x-text="formatDuration(track.duration)"></span>
-                                <button @click.stop="openEditModal(track)" class="p-1 text-white/0 group-hover:text-white/30 hover:!text-accent-purple transition-all" title="Edit"><i class="fas fa-ellipsis text-xs"></i></button>
-                                <button @click.stop="addToQueue(track)" class="p-1 text-white/0 group-hover:text-white/30 hover:!text-accent-purple transition-all" title="Queue"><i class="fas fa-plus text-xs"></i></button>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-                <div x-show="loading" class="flex flex-col items-center py-12 gap-2 text-white/30">
-                    <div class="w-48 h-3 rounded skeleton mb-2"></div>
-                    <div class="w-32 h-3 rounded skeleton"></div>
-                </div>
-            </div>
 
-            <!-- Playlists -->
-            <div x-show="activeTab === 'playlists'" x-cloak class="p-4 fade-in">
-                <template x-if="!selectedPlaylist">
-                    <div>
-                        <h3 class="text-base font-semibold mb-4">Your Playlists</h3>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                            <template x-for="pl in playlists" :key="pl.id">
-                                <div class="glass glass-hover rounded-xl p-4 cursor-pointer transition-all" @click="loadPlaylistTracks(pl)">
-                                    <div class="w-full aspect-square rounded-lg bg-gradient-to-br from-accent-purple/30 to-accent-blue/30 flex items-center justify-center mb-3">
-                                        <i class="fas fa-music text-2xl text-white/40"></i>
-                                    </div>
-                                    <p class="text-sm font-medium truncate" x-text="pl.name"></p>
-                                    <p class="text-[10px] text-white/40" x-text="pl.itemCount + ' tracks'"></p>
-                                    <button @click.stop="playPlaylist(pl)" class="mt-2 w-full py-1.5 rounded-lg bg-accent-purple/20 text-accent-purple text-xs hover:bg-accent-purple/30 transition-colors">
-                                        <i class="fas fa-play mr-1"></i> Play All
-                                    </button>
-                                </div>
-                            </template>
-                        </div>
-                        <div x-show="playlists.length === 0 && !loading" class="text-center py-12 text-white/30">
-                            <i class="fas fa-list text-3xl mb-2 block"></i>
-                            <p class="text-sm">No playlists found</p>
-                        </div>
-                    </div>
-                </template>
-                <template x-if="selectedPlaylist">
-                    <div>
-                        <div class="flex items-center gap-3 mb-4">
-                            <button @click="selectedPlaylist = null; playlistTracks = []" class="p-2 text-white/50 hover:text-white transition-colors"><i class="fas fa-arrow-left"></i></button>
-                            <div class="flex-1">
-                                <h3 class="font-semibold" x-text="selectedPlaylist.name"></h3>
-                                <p class="text-xs text-white/40" x-text="playlistTracks.length + ' tracks'"></p>
+                <div class="p-4">
+                    <!-- Songs sub-tab -->
+                    <div x-show="librarySubTab === 'songs'">
+                        <div class="flex gap-2 mb-3">
+                            <div class="flex-1 relative">
+                                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm"></i>
+                                <input type="text" x-model="searchQuery" @input="filterLibrary()" placeholder="Search tracks, artists, albums..."
+                                    class="w-full pl-9 pr-4 py-2.5 bg-dark-700 border border-white/5 rounded-xl text-sm placeholder-white/30 focus:outline-none focus:border-accent-purple/50">
                             </div>
-                            <button @click="playPlaylist(selectedPlaylist)" class="px-4 py-2 rounded-full bg-accent-purple text-sm font-medium hover:bg-accent-purple/80 transition-colors">
+                            <select x-model="sortBy" @change="sortLibrary()" class="px-3 py-2.5 bg-dark-700 border border-white/5 rounded-xl text-sm text-white/70 focus:outline-none">
+                                <option value="dateAdded">Recent</option>
+                                <option value="title">Title</option>
+                                <option value="artist">Artist</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-xs text-white/30"><span x-text="filteredLibrary.length"></span> tracks</p>
+                            <button @click="playAllFiltered()" x-show="filteredLibrary.length > 0" class="text-xs px-3 py-1 rounded-full bg-accent-purple/20 text-accent-purple hover:bg-accent-purple/30 transition-colors">
                                 <i class="fas fa-play mr-1"></i> Play All
                             </button>
                         </div>
-                        <div class="space-y-0.5">
-                            <template x-for="(track, i) in playlistTracks" :key="track.id">
-                                <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer transition-all border border-transparent"
-                                    :class="currentTrack && currentTrack.id === track.id ? 'border-accent-purple/20 bg-accent-purple/5' : ''"
-                                    @click="playFromList(track, playlistTracks)">
-                                    <span class="text-xs text-white/20 w-5 text-right" x-text="i + 1"></span>
-                                    <div class="w-9 h-9 rounded bg-dark-600 flex-shrink-0 overflow-hidden relative">
+                        <div class="space-y-1.5">
+                            <template x-for="track in filteredLibrary" :key="track.id">
+                                <div class="glass glass-hover rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all group border border-transparent"
+                                    :class="currentTrack && currentTrack.id === track.id ? 'border-accent-purple/30 bg-accent-purple/5' : ''"
+                                    @click="playFromList(track, filteredLibrary)" @contextmenu.prevent="openEditModal(track)">
+                                    <div class="w-12 h-12 rounded-lg bg-dark-600 flex-shrink-0 overflow-hidden relative">
                                         <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover" loading="lazy">
+                                        <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center"><i class="fas fa-music text-white/20"></i></div>
                                         <template x-if="currentTrack && currentTrack.id === track.id && isPlaying">
-                                            <div class="absolute inset-0 bg-black/60 flex items-end justify-center gap-0.5 pb-1.5">
+                                            <div class="absolute inset-0 bg-black/60 flex items-end justify-center gap-0.5 pb-2">
                                                 <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
                                                 <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
                                                 <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
@@ -323,16 +266,247 @@
                                         </template>
                                     </div>
                                     <div class="flex-1 min-w-0">
-                                        <p class="text-sm font-medium truncate" x-text="track.title"></p>
-                                        <p class="text-xs text-white/40 truncate" x-text="track.artist"></p>
+                                        <p class="text-sm font-bold truncate" x-text="track.title"></p>
+                                        <p class="text-xs text-white/50 truncate" x-text="track.artist"></p>
+                                        <span x-show="track.username" class="inline-block mt-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-accent-purple/15 text-accent-purple/80" x-text="'Added by ' + track.username"></span>
                                     </div>
-                                    <span class="text-[10px] text-white/20" x-text="formatDuration(track.duration)"></span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[11px] text-white/30 tabular-nums" x-text="formatDuration(track.duration)"></span>
+                                        <button @click.stop="openEditModal(track)" class="p-1.5 text-white/30 hover:text-accent-purple transition-all rounded-lg hover:bg-white/5" title="Edit"><i class="fas fa-ellipsis"></i></button>
+                                        <button @click.stop="addToQueue(track)" class="p-1.5 text-white/30 hover:text-accent-purple transition-all rounded-lg hover:bg-white/5" title="Add to queue"><i class="fas fa-plus text-xs"></i></button>
+                                    </div>
                                 </div>
                             </template>
                         </div>
+                        <div x-show="loading" class="flex flex-col items-center py-12 gap-2 text-white/30">
+                            <div class="w-48 h-3 rounded skeleton mb-2"></div>
+                            <div class="w-32 h-3 rounded skeleton"></div>
+                        </div>
                     </div>
-                </template>
+
+                    <!-- Albums sub-tab -->
+                    <div x-show="librarySubTab === 'albums'">
+                        <template x-if="!selectedAlbum">
+                            <div>
+                                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                    <template x-for="album in getAlbums()" :key="album.name">
+                                        <div class="glass glass-hover rounded-xl p-3 cursor-pointer transition-all" @click="selectedAlbum = album">
+                                            <div class="w-full aspect-square rounded-lg bg-dark-600 overflow-hidden mb-2">
+                                                <img x-show="album.art" :src="album.art" class="w-full h-full object-cover" loading="lazy">
+                                                <div x-show="!album.art" class="w-full h-full flex items-center justify-center"><i class="fas fa-compact-disc text-2xl text-white/20"></i></div>
+                                            </div>
+                                            <p class="text-sm font-medium truncate" x-text="album.name"></p>
+                                            <p class="text-[10px] text-white/40 truncate" x-text="album.artist + ' • ' + album.count + ' tracks'"></p>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div x-show="getAlbums().length === 0" class="text-center py-12 text-white/30">
+                                    <i class="fas fa-compact-disc text-3xl mb-2 block"></i>
+                                    <p class="text-sm">No albums found</p>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="selectedAlbum">
+                            <div>
+                                <div class="flex items-center gap-3 mb-4">
+                                    <button @click="selectedAlbum = null" class="p-2 text-white/50 hover:text-white transition-colors"><i class="fas fa-arrow-left"></i></button>
+                                    <div class="w-12 h-12 rounded-lg bg-dark-600 overflow-hidden flex-shrink-0">
+                                        <img x-show="selectedAlbum.art" :src="selectedAlbum.art" class="w-full h-full object-cover">
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <h3 class="font-semibold truncate" x-text="selectedAlbum.name"></h3>
+                                        <p class="text-xs text-white/40" x-text="selectedAlbum.artist + ' • ' + selectedAlbum.count + ' tracks'"></p>
+                                    </div>
+                                    <button @click="playFromList(getAlbumTracks(selectedAlbum)[0], getAlbumTracks(selectedAlbum))" class="px-4 py-2 rounded-full bg-accent-purple text-sm font-medium hover:bg-accent-purple/80 transition-colors">
+                                        <i class="fas fa-play mr-1"></i> Play
+                                    </button>
+                                </div>
+                                <div class="space-y-1">
+                                    <template x-for="(track, i) in getAlbumTracks(selectedAlbum)" :key="track.id">
+                                        <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer transition-all border border-transparent"
+                                            :class="currentTrack && currentTrack.id === track.id ? 'border-accent-purple/20 bg-accent-purple/5' : ''"
+                                            @click="playFromList(track, getAlbumTracks(selectedAlbum))">
+                                            <span class="text-xs text-white/20 w-5 text-right" x-text="i + 1"></span>
+                                            <div class="flex-1 min-w-0">
+                                                <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                                <p class="text-xs text-white/40 truncate" x-text="track.artist"></p>
+                                            </div>
+                                            <span class="text-[10px] text-white/20" x-text="formatDuration(track.duration)"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Artists sub-tab -->
+                    <div x-show="librarySubTab === 'artists'">
+                        <template x-if="!selectedArtist">
+                            <div class="space-y-1">
+                                <template x-for="artist in getArtistList()" :key="artist.name">
+                                    <div class="glass-hover rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all" @click="selectedArtist = artist">
+                                        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-accent-purple/40 to-accent-blue/40 flex items-center justify-center font-bold text-sm" x-text="artist.name.charAt(0).toUpperCase()"></div>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm font-medium truncate" x-text="artist.name"></p>
+                                            <p class="text-[10px] text-white/40" x-text="artist.count + ' tracks'"></p>
+                                        </div>
+                                        <i class="fas fa-chevron-right text-white/20 text-xs"></i>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <template x-if="selectedArtist">
+                            <div>
+                                <div class="flex items-center gap-3 mb-4">
+                                    <button @click="selectedArtist = null" class="p-2 text-white/50 hover:text-white transition-colors"><i class="fas fa-arrow-left"></i></button>
+                                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-accent-purple to-accent-pink flex items-center justify-center font-bold" x-text="selectedArtist.name.charAt(0).toUpperCase()"></div>
+                                    <div class="flex-1 min-w-0">
+                                        <h3 class="font-semibold truncate" x-text="selectedArtist.name"></h3>
+                                        <p class="text-xs text-white/40" x-text="selectedArtist.count + ' tracks'"></p>
+                                    </div>
+                                    <button @click="playFromList(getArtistTracks(selectedArtist)[0], getArtistTracks(selectedArtist))" class="px-4 py-2 rounded-full bg-accent-purple text-sm font-medium hover:bg-accent-purple/80 transition-colors">
+                                        <i class="fas fa-play mr-1"></i> Play
+                                    </button>
+                                </div>
+                                <div class="space-y-1">
+                                    <template x-for="track in getArtistTracks(selectedArtist)" :key="track.id">
+                                        <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer transition-all border border-transparent"
+                                            :class="currentTrack && currentTrack.id === track.id ? 'border-accent-purple/20 bg-accent-purple/5' : ''"
+                                            @click="playFromList(track, getArtistTracks(selectedArtist))">
+                                            <div class="w-9 h-9 rounded bg-dark-600 flex-shrink-0 overflow-hidden">
+                                                <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover" loading="lazy">
+                                                <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center"><i class="fas fa-music text-white/20 text-xs"></i></div>
+                                            </div>
+                                            <div class="flex-1 min-w-0">
+                                                <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                                <p class="text-xs text-white/40 truncate" x-text="track.album || ''"></p>
+                                            </div>
+                                            <span class="text-[10px] text-white/20" x-text="formatDuration(track.duration)"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Playlists sub-tab -->
+                    <div x-show="librarySubTab === 'playlists'">
+                        <template x-if="!selectedPlaylist">
+                            <div>
+                                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                    <template x-for="pl in playlists" :key="pl.id">
+                                        <div class="glass glass-hover rounded-xl p-4 cursor-pointer transition-all" @click="loadPlaylistTracks(pl)">
+                                            <div class="w-full aspect-square rounded-lg bg-gradient-to-br from-accent-purple/30 to-accent-blue/30 flex items-center justify-center mb-3">
+                                                <i class="fas fa-music text-2xl text-white/40"></i>
+                                            </div>
+                                            <p class="text-sm font-medium truncate" x-text="pl.name"></p>
+                                            <p class="text-[10px] text-white/40" x-text="pl.itemCount + ' tracks'"></p>
+                                            <button @click.stop="playPlaylist(pl)" class="mt-2 w-full py-1.5 rounded-lg bg-accent-purple/20 text-accent-purple text-xs hover:bg-accent-purple/30 transition-colors">
+                                                <i class="fas fa-play mr-1"></i> Play All
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div x-show="playlists.length === 0 && !loading" class="text-center py-12 text-white/30">
+                                    <i class="fas fa-list text-3xl mb-2 block"></i>
+                                    <p class="text-sm">No playlists found</p>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="selectedPlaylist">
+                            <div>
+                                <div class="flex items-center gap-3 mb-4">
+                                    <button @click="selectedPlaylist = null; playlistTracks = []" class="p-2 text-white/50 hover:text-white transition-colors"><i class="fas fa-arrow-left"></i></button>
+                                    <div class="flex-1">
+                                        <h3 class="font-semibold" x-text="selectedPlaylist.name"></h3>
+                                        <p class="text-xs text-white/40" x-text="playlistTracks.length + ' tracks'"></p>
+                                    </div>
+                                    <button @click="playPlaylist(selectedPlaylist)" class="px-4 py-2 rounded-full bg-accent-purple text-sm font-medium hover:bg-accent-purple/80 transition-colors">
+                                        <i class="fas fa-play mr-1"></i> Play All
+                                    </button>
+                                </div>
+                                <div class="space-y-0.5">
+                                    <template x-for="(track, i) in playlistTracks" :key="track.id">
+                                        <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer transition-all border border-transparent"
+                                            :class="currentTrack && currentTrack.id === track.id ? 'border-accent-purple/20 bg-accent-purple/5' : ''"
+                                            @click="playFromList(track, playlistTracks)">
+                                            <span class="text-xs text-white/20 w-5 text-right" x-text="i + 1"></span>
+                                            <div class="w-9 h-9 rounded bg-dark-600 flex-shrink-0 overflow-hidden relative">
+                                                <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover" loading="lazy">
+                                                <template x-if="currentTrack && currentTrack.id === track.id && isPlaying">
+                                                    <div class="absolute inset-0 bg-black/60 flex items-end justify-center gap-0.5 pb-1.5">
+                                                        <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
+                                                        <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
+                                                        <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                            <div class="flex-1 min-w-0">
+                                                <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                                <p class="text-xs text-white/40 truncate" x-text="track.artist"></p>
+                                            </div>
+                                            <span class="text-[10px] text-white/20" x-text="formatDuration(track.duration)"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Genres sub-tab -->
+                    <div x-show="librarySubTab === 'genres'">
+                        <template x-if="!selectedGenre">
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                <template x-for="genre in getGenres()" :key="genre.name">
+                                    <div class="glass glass-hover rounded-xl p-4 cursor-pointer transition-all" @click="selectedGenre = genre">
+                                        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-pink/30 to-accent-purple/30 flex items-center justify-center mb-2">
+                                            <i class="fas fa-tag text-white/40"></i>
+                                        </div>
+                                        <p class="text-sm font-medium truncate" x-text="genre.name"></p>
+                                        <p class="text-[10px] text-white/40" x-text="genre.count + ' tracks'"></p>
+                                    </div>
+                                </template>
+                                <div x-show="getGenres().length === 0" class="col-span-full text-center py-12 text-white/30">
+                                    <i class="fas fa-tag text-3xl mb-2 block"></i>
+                                    <p class="text-sm">No genres found</p>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="selectedGenre">
+                            <div>
+                                <div class="flex items-center gap-3 mb-4">
+                                    <button @click="selectedGenre = null" class="p-2 text-white/50 hover:text-white transition-colors"><i class="fas fa-arrow-left"></i></button>
+                                    <div class="flex-1 min-w-0">
+                                        <h3 class="font-semibold truncate" x-text="selectedGenre.name"></h3>
+                                        <p class="text-xs text-white/40" x-text="selectedGenre.count + ' tracks'"></p>
+                                    </div>
+                                    <button @click="playFromList(getGenreTracks(selectedGenre)[0], getGenreTracks(selectedGenre))" class="px-4 py-2 rounded-full bg-accent-purple text-sm font-medium hover:bg-accent-purple/80 transition-colors">
+                                        <i class="fas fa-play mr-1"></i> Play
+                                    </button>
+                                </div>
+                                <div class="space-y-1">
+                                    <template x-for="track in getGenreTracks(selectedGenre)" :key="track.id">
+                                        <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer transition-all border border-transparent"
+                                            :class="currentTrack && currentTrack.id === track.id ? 'border-accent-purple/20 bg-accent-purple/5' : ''"
+                                            @click="playFromList(track, getGenreTracks(selectedGenre))">
+                                            <div class="w-9 h-9 rounded bg-dark-600 flex-shrink-0 overflow-hidden">
+                                                <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover" loading="lazy">
+                                                <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center"><i class="fas fa-music text-white/20 text-xs"></i></div>
+                                            </div>
+                                            <div class="flex-1 min-w-0">
+                                                <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                                <p class="text-xs text-white/40 truncate" x-text="track.artist"></p>
+                                            </div>
+                                            <span class="text-[10px] text-white/20" x-text="formatDuration(track.duration)"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
             </div>
+
 
             <!-- Social -->
             <div x-show="activeTab === 'social'" x-cloak class="p-4 fade-in">
@@ -437,26 +611,9 @@
         </div>
     </div>
 
-    <!-- Bottom Nav Tabs -->
-    <nav class="flex-shrink-0 glass border-t border-white/5 flex items-center justify-around z-50 fixed bottom-0 left-0 right-0"
-        :class="currentTrack ? 'bottom-[60px]' : 'bottom-0'">
-        <button @click="activeTab = 'discovery'" :class="activeTab === 'discovery' ? 'text-accent-purple' : 'text-white/40'" class="flex-1 py-3 flex flex-col items-center gap-0.5 transition-colors">
-            <i class="fas fa-fire text-sm"></i><span class="text-[10px]">Discovery</span>
-        </button>
-        <button @click="activeTab = 'library'" :class="activeTab === 'library' ? 'text-accent-purple' : 'text-white/40'" class="flex-1 py-3 flex flex-col items-center gap-0.5 transition-colors">
-            <i class="fas fa-music text-sm"></i><span class="text-[10px]">Library</span>
-        </button>
-        <button @click="activeTab = 'playlists'" :class="activeTab === 'playlists' ? 'text-accent-purple' : 'text-white/40'" class="flex-1 py-3 flex flex-col items-center gap-0.5 transition-colors">
-            <i class="fas fa-list text-sm"></i><span class="text-[10px]">Playlists</span>
-        </button>
-        <button @click="activeTab = 'social'" :class="activeTab === 'social' ? 'text-accent-purple' : 'text-white/40'" class="flex-1 py-3 flex flex-col items-center gap-0.5 transition-colors">
-            <i class="fas fa-users text-sm"></i><span class="text-[10px]">Social</span>
-        </button>
-    </nav>
-
     <!-- Mini Player Bar -->
     <div x-show="currentTrack" x-cloak @click="showFullPlayer = true"
-        class="fixed left-0 right-0 z-50 cursor-pointer" :class="currentTrack ? 'bottom-[52px]' : 'bottom-0'">
+        class="flex-shrink-0 cursor-pointer z-50">
         <div class="h-0.5 bg-white/5"><div class="h-full progress-gradient transition-all" :style="'width:' + progressPercent + '%'"></div></div>
         <div class="glass-strong px-3 py-2 flex items-center gap-3">
             <div class="w-10 h-10 rounded-lg bg-dark-600 overflow-hidden flex-shrink-0" :class="isPlaying ? 'album-glow' : ''">
@@ -473,88 +630,104 @@
         </div>
     </div>
 
+    <!-- Bottom Nav Tabs -->
+    <nav class="flex-shrink-0 glass border-t border-white/5 flex items-center justify-around z-50">
+        <button @click="activeTab = 'discovery'" :class="activeTab === 'discovery' ? 'text-accent-purple' : 'text-white/40'" class="flex-1 py-3 flex flex-col items-center gap-0.5 transition-colors">
+            <i class="fas fa-fire text-sm"></i><span class="text-[10px]">Discovery</span>
+        </button>
+        <button @click="activeTab = 'library'" :class="activeTab === 'library' ? 'text-accent-purple' : 'text-white/40'" class="flex-1 py-3 flex flex-col items-center gap-0.5 transition-colors">
+            <i class="fas fa-music text-sm"></i><span class="text-[10px]">Library</span>
+        </button>
+        <button @click="activeTab = 'social'" :class="activeTab === 'social' ? 'text-accent-purple' : 'text-white/40'" class="flex-1 py-3 flex flex-col items-center gap-0.5 transition-colors">
+            <i class="fas fa-users text-sm"></i><span class="text-[10px]">Social</span>
+        </button>
+    </nav>
+
     <!-- Full-Screen Player -->
     <div x-show="showFullPlayer" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="translate-y-full" x-transition:enter-end="translate-y-0"
         x-transition:leave="transition ease-in duration-200" x-transition:leave-start="translate-y-0" x-transition:leave-end="translate-y-full"
         class="fixed inset-0 z-[100] bg-dark-900 flex flex-col overflow-hidden">
         <div class="absolute inset-0 opacity-20" :style="currentTrack?.albumArt ? 'background:url('+currentTrack.albumArt+') center/cover no-repeat; filter:blur(80px)' : ''"></div>
-        <div class="relative flex flex-col h-full p-6 pt-4">
+        <div class="relative flex flex-col h-full">
             <!-- Top bar -->
-            <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center justify-between px-6 pt-4 pb-2 flex-shrink-0">
                 <button @click="showFullPlayer = false" class="p-2 text-white/60 hover:text-white transition-colors"><i class="fas fa-chevron-down text-lg"></i></button>
                 <span class="text-xs text-white/40 uppercase tracking-wider">Now Playing</span>
-                <button @click="showComments = true" class="p-2 text-white/60 hover:text-white transition-colors relative">
-                    <i class="fas fa-comment text-lg"></i>
-                    <span x-show="getCommentCount(currentTrack) > 0" class="absolute -top-0.5 -right-0.5 bg-accent-pink text-[9px] w-4 h-4 rounded-full flex items-center justify-center" x-text="getCommentCount(currentTrack)"></span>
+                <button @click="openEditModal(currentTrack)" class="p-2 text-white/60 hover:text-white transition-colors">
+                    <i class="fas fa-pen text-sm"></i>
                 </button>
             </div>
-            <!-- Album Art -->
-            <div class="flex-1 flex items-center justify-center">
-                <div class="w-full max-w-xs aspect-square rounded-2xl bg-dark-600 overflow-hidden" :class="isPlaying ? 'album-glow' : ''">
-                    <img x-show="currentTrack?.albumArt" :src="currentTrack?.albumArt" class="w-full h-full object-cover">
-                    <div x-show="!currentTrack?.albumArt" class="w-full h-full flex items-center justify-center"><i class="fas fa-music text-4xl text-white/20"></i></div>
-                </div>
-            </div>
-            <!-- Track Info -->
-            <div class="mt-6 text-center">
-                <h2 class="text-xl font-bold truncate" x-text="currentTrack?.title || 'No track'"></h2>
-                <p class="text-white/60 mt-1" x-text="currentTrack?.artist"></p>
-                <p x-show="currentTrack?.username" class="text-xs text-accent-purple mt-1">added by <span x-text="currentTrack?.username"></span></p>
-            </div>
-            <!-- Thumbs -->
-            <div class="flex items-center justify-center gap-8 mt-4">
-                <button @click="thumbDown(currentTrack)" :class="getThumb(currentTrack) === -1 ? 'text-red-400 scale-110' : 'text-white/30 hover:text-red-400'" class="p-2 transition-all"><i class="fas fa-thumbs-down text-lg"></i></button>
-                <button @click="thumbUp(currentTrack)" :class="getThumb(currentTrack) === 1 ? 'text-green-400 scale-110' : 'text-white/30 hover:text-green-400'" class="p-2 transition-all"><i class="fas fa-thumbs-up text-lg"></i></button>
-            </div>
-            <!-- Seekbar -->
-            <div class="mt-4 flex items-center gap-3">
-                <span class="text-xs text-white/40 w-10 text-right" x-text="formatTime(currentTime)"></span>
-                <input type="range" min="0" :max="duration || 100" :value="currentTime" @input="seek($event.target.value)" class="flex-1 cursor-pointer">
-                <span class="text-xs text-white/40 w-10" x-text="formatTime(duration)"></span>
-            </div>
-            <!-- Controls -->
-            <div class="flex items-center justify-center gap-6 mt-4 mb-6">
-                <button @click="toggleShuffle()" :class="shuffle ? 'text-accent-purple' : 'text-white/30 hover:text-white/60'" class="p-2 transition-colors"><i class="fas fa-shuffle"></i></button>
-                <button @click="playPrev()" class="p-2 text-white/70 hover:text-white transition-colors"><i class="fas fa-backward-step text-xl"></i></button>
-                <button @click="togglePlay()" class="w-14 h-14 rounded-full bg-white flex items-center justify-center text-dark-900 hover:scale-105 transition-transform">
-                    <i :class="isPlaying ? 'fas fa-pause' : 'fas fa-play'" class="text-xl" :style="!isPlaying ? 'margin-left:3px' : ''"></i>
-                </button>
-                <button @click="playNext()" class="p-2 text-white/70 hover:text-white transition-colors"><i class="fas fa-forward-step text-xl"></i></button>
-                <button @click="toggleRepeat()" :class="repeat !== 'off' ? 'text-accent-purple' : 'text-white/30 hover:text-white/60'" class="p-2 transition-colors relative">
-                    <i class="fas fa-repeat"></i>
-                    <span x-show="repeat === 'one'" class="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] font-bold text-accent-purple">1</span>
-                </button>
-            </div>
-            <!-- Edit button -->
-            <div class="flex justify-center mb-2">
-                <button @click="openEditModal(currentTrack)" class="text-xs text-white/40 hover:text-white/70 transition-colors"><i class="fas fa-pen mr-1"></i> Edit Info</button>
-            </div>
-        </div>
-    </div>
 
-    <!-- Comments Sheet -->
-    <div x-show="showComments" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="translate-y-full" x-transition:enter-end="translate-y-0"
-        x-transition:leave="transition ease-in duration-150" x-transition:leave-start="translate-y-0" x-transition:leave-end="translate-y-full"
-        class="fixed inset-x-0 bottom-0 z-[110] glass-strong rounded-t-2xl max-h-[60vh] flex flex-col">
-        <div class="p-4 border-b border-white/5 flex items-center justify-between flex-shrink-0">
-            <h4 class="font-semibold text-sm">Comments</h4>
-            <button @click="showComments = false" class="text-white/40 hover:text-white"><i class="fas fa-times"></i></button>
-        </div>
-        <div class="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-3">
-            <template x-for="(c, i) in getComments(currentTrack)" :key="i">
-                <div class="flex gap-2">
-                    <div class="w-6 h-6 rounded-full bg-accent-purple/30 flex items-center justify-center text-[9px] font-bold flex-shrink-0" x-text="c.user.charAt(0).toUpperCase()"></div>
-                    <div>
-                        <p class="text-xs"><span class="font-medium text-accent-purple" x-text="c.user"></span> <span class="text-white/30" x-text="c.time"></span></p>
-                        <p class="text-sm text-white/80 mt-0.5" x-text="c.text"></p>
+            <!-- Scrollable content: artwork, info, controls, comments -->
+            <div class="flex-1 overflow-y-auto scrollbar-thin px-6">
+                <!-- Album Art -->
+                <div class="flex items-center justify-center py-4">
+                    <div class="w-full max-w-[240px] aspect-square rounded-2xl bg-dark-600 overflow-hidden" :class="isPlaying ? 'album-glow' : ''">
+                        <img x-show="currentTrack?.albumArt" :src="currentTrack?.albumArt" class="w-full h-full object-cover">
+                        <div x-show="!currentTrack?.albumArt" class="w-full h-full flex items-center justify-center"><i class="fas fa-music text-4xl text-white/20"></i></div>
                     </div>
                 </div>
-            </template>
-            <div x-show="getComments(currentTrack).length === 0" class="text-center text-white/30 text-xs py-4">No comments yet</div>
-        </div>
-        <div class="p-3 border-t border-white/5 flex gap-2 flex-shrink-0">
-            <input x-model="newComment" @keyup.enter="postComment()" placeholder="Add a comment..." class="flex-1 px-3 py-2 bg-dark-700 rounded-lg text-sm border border-white/5 focus:outline-none focus:border-accent-purple/50">
-            <button @click="postComment()" class="px-3 py-2 bg-accent-purple rounded-lg text-sm font-medium hover:bg-accent-purple/80 transition-colors"><i class="fas fa-paper-plane"></i></button>
+                <!-- Track Info -->
+                <div class="text-center">
+                    <h2 class="text-xl font-bold truncate" x-text="currentTrack?.title || 'No track'"></h2>
+                    <p class="text-white/60 mt-1" x-text="currentTrack?.artist"></p>
+                    <p x-show="currentTrack?.username" class="text-xs text-accent-purple mt-1">added by <span x-text="currentTrack?.username"></span></p>
+                </div>
+                <!-- Seekbar -->
+                <div class="mt-4 flex items-center gap-3">
+                    <span class="text-xs text-white/40 w-10 text-right" x-text="formatTime(currentTime)"></span>
+                    <input type="range" min="0" :max="duration || 100" :value="currentTime" @input="seek($event.target.value)" class="flex-1 cursor-pointer">
+                    <span class="text-xs text-white/40 w-10" x-text="formatTime(duration)"></span>
+                </div>
+                <!-- Controls -->
+                <div class="flex items-center justify-center gap-6 mt-3 mb-4">
+                    <button @click="toggleShuffle()" :class="shuffle ? 'text-accent-purple' : 'text-white/30 hover:text-white/60'" class="p-2 transition-colors"><i class="fas fa-shuffle"></i></button>
+                    <button @click="playPrev()" class="p-2 text-white/70 hover:text-white transition-colors"><i class="fas fa-backward-step text-xl"></i></button>
+                    <button @click="togglePlay()" class="w-14 h-14 rounded-full bg-white flex items-center justify-center text-dark-900 hover:scale-105 transition-transform">
+                        <i :class="isPlaying ? 'fas fa-pause' : 'fas fa-play'" class="text-xl" :style="!isPlaying ? 'margin-left:3px' : ''"></i>
+                    </button>
+                    <button @click="playNext()" class="p-2 text-white/70 hover:text-white transition-colors"><i class="fas fa-forward-step text-xl"></i></button>
+                    <button @click="toggleRepeat()" :class="repeat !== 'off' ? 'text-accent-purple' : 'text-white/30 hover:text-white/60'" class="p-2 transition-colors relative">
+                        <i class="fas fa-repeat"></i>
+                        <span x-show="repeat === 'one'" class="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] font-bold text-accent-purple">1</span>
+                    </button>
+                </div>
+
+                <!-- Comments Feed -->
+                <div class="border-t border-white/5 pt-4 pb-2">
+                    <h4 class="text-sm font-semibold text-white/60 mb-3"><i class="fas fa-comment mr-1"></i> Comments <span x-show="getCommentCount(currentTrack) > 0" class="text-accent-purple" x-text="'(' + getCommentCount(currentTrack) + ')'"></span></h4>
+                    <div class="space-y-3 min-h-[60px]">
+                        <template x-for="(c, i) in getComments(currentTrack)" :key="i">
+                            <div class="flex gap-2">
+                                <div class="w-6 h-6 rounded-full bg-accent-purple/30 flex items-center justify-center text-[9px] font-bold flex-shrink-0" x-text="c.user.charAt(0).toUpperCase()"></div>
+                                <div>
+                                    <p class="text-xs"><span class="font-medium text-accent-purple" x-text="c.user"></span> <span class="text-white/30" x-text="c.time"></span></p>
+                                    <p class="text-sm text-white/80 mt-0.5" x-text="c.text"></p>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="getComments(currentTrack).length === 0" class="text-center text-white/30 text-xs py-4">No comments yet. Be the first!</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Social-style comment/reaction bar (fixed at bottom of player) -->
+            <div class="flex-shrink-0 border-t border-white/10 glass-strong px-4 py-2.5">
+                <div class="flex items-center gap-2">
+                    <div class="flex gap-1 flex-shrink-0">
+                        <button @click="postReaction('fire')" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors text-base">&#x1F525;</button>
+                        <button @click="postReaction('heart')" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors text-base">&#x2764;&#xFE0F;</button>
+                        <button @click="postReaction('hundred')" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors text-base">&#x1F4AF;</button>
+                        <button @click="postReaction('thumbsup')" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors text-base">&#x1F44D;</button>
+                        <button @click="postReaction('thumbsdown')" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors text-base">&#x1F44E;</button>
+                    </div>
+                    <input x-model="newComment" @keyup.enter="postComment()" placeholder="Add a comment..."
+                        class="flex-1 px-3 py-2 bg-dark-700 rounded-full text-sm border border-white/5 focus:outline-none focus:border-accent-purple/50">
+                    <button @click="postComment()" class="w-8 h-8 rounded-full bg-accent-purple flex items-center justify-center hover:bg-accent-purple/80 transition-colors flex-shrink-0">
+                        <i class="fas fa-paper-plane text-xs"></i>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -611,6 +784,7 @@ function app() {
         activeTab: 'discovery', showQueue: false, showNotifications: false,
         showFullPlayer: false, showComments: false, showEditModal: false,
         loading: true, toast: '',
+        librarySubTab: 'songs', selectedAlbum: null, selectedArtist: null, selectedGenre: null,
 
         currentTrack: null, isPlaying: false, currentTime: 0, duration: 0,
         volume: 0.8, previousVolume: 0.8, shuffle: false, repeat: 'off',
@@ -906,6 +1080,15 @@ function app() {
             localStorage.setItem('slaplayer_comments', JSON.stringify(this.comments));
         },
 
+        postReaction(type) {
+            if (!this.currentTrack) return;
+            const emojiMap = { fire: '\u{1F525}', heart: '❤️', hundred: '\u{1F4AF}', thumbsup: '\u{1F44D}', thumbsdown: '\u{1F44E}' };
+            const emoji = emojiMap[type] || type;
+            if (!this.comments[this.currentTrack.id]) this.comments[this.currentTrack.id] = [];
+            this.comments[this.currentTrack.id].push({ user: this.username || 'You', text: emoji, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+            localStorage.setItem('slaplayer_comments', JSON.stringify(this.comments));
+        },
+
         // Metadata editing
         openEditModal(track) {
             if (!track) return;
@@ -958,6 +1141,53 @@ function app() {
         },
 
         getUserTracks(username) { return username ? this.library.filter(t => t.username && t.username.toLowerCase() === username.toLowerCase()) : []; },
+
+        getAlbums() {
+            const map = {};
+            this.library.forEach(t => {
+                const key = (t.album || 'Unknown Album').toLowerCase();
+                if (!map[key]) map[key] = { name: t.album || 'Unknown Album', artist: t.artist, art: t.albumArt, count: 0 };
+                map[key].count++;
+            });
+            return Object.values(map).sort((a, b) => b.count - a.count);
+        },
+
+        getAlbumTracks(album) {
+            if (!album) return [];
+            return this.library.filter(t => (t.album || 'Unknown Album').toLowerCase() === album.name.toLowerCase());
+        },
+
+        getArtistList() {
+            const map = {};
+            this.library.forEach(t => {
+                const key = t.artist.toLowerCase();
+                if (!map[key]) map[key] = { name: t.artist, count: 0 };
+                map[key].count++;
+            });
+            return Object.values(map).sort((a, b) => a.name.localeCompare(b.name));
+        },
+
+        getArtistTracks(artist) {
+            if (!artist) return [];
+            return this.library.filter(t => t.artist.toLowerCase() === artist.name.toLowerCase());
+        },
+
+        getGenres() {
+            const map = {};
+            this.library.forEach(t => {
+                const g = t.genre || '';
+                if (!g) return;
+                const key = g.toLowerCase();
+                if (!map[key]) map[key] = { name: g, count: 0 };
+                map[key].count++;
+            });
+            return Object.values(map).sort((a, b) => b.count - a.count);
+        },
+
+        getGenreTracks(genre) {
+            if (!genre) return [];
+            return this.library.filter(t => t.genre && t.genre.toLowerCase() === genre.name.toLowerCase());
+        },
 
         showToast(msg) { this.toast = msg; setTimeout(() => this.toast = '', 2000); },
         formatTime(s) { if (!s || isNaN(s)) return '0:00'; return Math.floor(s/60) + ':' + String(Math.floor(s%60)).padStart(2, '0'); },
