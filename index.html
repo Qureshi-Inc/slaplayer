@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SlapPlayer</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            900: '#0a0a0f',
+                            800: '#12121a',
+                            700: '#1a1a25',
+                            600: '#222233',
+                        },
+                        accent: {
+                            purple: '#8b5cf6',
+                            blue: '#3b82f6',
+                            pink: '#ec4899',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        body { background: #0a0a0f; }
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .glass-hover:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #8b5cf6, #3b82f6, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .gradient-border {
+            border-image: linear-gradient(135deg, #8b5cf6, #3b82f6, #ec4899) 1;
+        }
+        .progress-bar {
+            background: linear-gradient(90deg, #8b5cf6, #ec4899);
+        }
+        .album-art-glow {
+            box-shadow: 0 0 40px rgba(139, 92, 246, 0.3);
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #8b5cf6;
+            cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #8b5cf6;
+            cursor: pointer;
+            border: none;
+        }
+        .tab-active {
+            border-bottom: 2px solid #8b5cf6;
+            color: white;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .spin {
+            animation: spin 3s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 6px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        .queue-item {
+            transition: all 0.2s ease;
+        }
+        .queue-item:hover {
+            background: rgba(255,255,255,0.05);
+        }
+    </style>
+</head>
+<body class="h-full text-white overflow-hidden" x-data="app()" x-init="init()">
+
+    <!-- Main Layout -->
+    <div class="flex flex-col h-full">
+
+        <!-- Top Navigation -->
+        <nav class="glass border-b border-white/5 px-4 py-3 flex items-center justify-between z-50">
+            <div class="flex items-center gap-3">
+                <h1 class="text-xl font-bold gradient-text">SlapPlayer</h1>
+                <span class="text-xs text-white/30 hidden sm:inline">by the squad</span>
+            </div>
+            <div class="flex items-center gap-1">
+                <button @click="activeTab = 'discovery'"
+                    :class="activeTab === 'discovery' ? 'tab-active' : 'text-white/50 hover:text-white/80'"
+                    class="px-4 py-2 text-sm font-medium transition-all">
+                    <i class="fas fa-fire mr-1.5"></i><span class="hidden sm:inline">Discovery</span>
+                </button>
+                <button @click="activeTab = 'library'"
+                    :class="activeTab === 'library' ? 'tab-active' : 'text-white/50 hover:text-white/80'"
+                    class="px-4 py-2 text-sm font-medium transition-all">
+                    <i class="fas fa-music mr-1.5"></i><span class="hidden sm:inline">Library</span>
+                </button>
+                <button @click="activeTab = 'social'"
+                    :class="activeTab === 'social' ? 'tab-active' : 'text-white/50 hover:text-white/80'"
+                    class="px-4 py-2 text-sm font-medium transition-all">
+                    <i class="fas fa-users mr-1.5"></i><span class="hidden sm:inline">Social</span>
+                </button>
+            </div>
+            <div class="flex items-center gap-2">
+                <button @click="showQueue = !showQueue"
+                    :class="showQueue ? 'text-accent-purple' : 'text-white/50 hover:text-white/80'"
+                    class="p-2 transition-colors relative">
+                    <i class="fas fa-list-ol"></i>
+                    <span x-show="queue.length > 0"
+                        class="absolute -top-0.5 -right-0.5 bg-accent-purple text-[10px] w-4 h-4 rounded-full flex items-center justify-center"
+                        x-text="queue.length"></span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Content Area -->
+        <div class="flex-1 overflow-hidden flex relative">
+
+            <!-- Main Content -->
+            <div class="flex-1 overflow-y-auto scrollbar-thin pb-28" :class="showQueue ? 'pr-0 lg:pr-80' : ''">
+
+                <!-- Discovery Tab -->
+                <div x-show="activeTab === 'discovery'" x-cloak class="p-4 md:p-6 space-y-6 fade-in">
+
+                    <!-- Vibe Banner -->
+                    <div class="glass rounded-2xl p-6 relative overflow-hidden">
+                        <div class="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-pink-500/10"></div>
+                        <div class="relative">
+                            <p class="text-white/40 text-xs uppercase tracking-wider mb-1">The Squad Is Feeling</p>
+                            <h2 class="text-2xl font-bold" x-text="vibeText || 'Loading vibes...'"></h2>
+                            <p class="text-white/50 text-sm mt-1" x-text="vibeSubtext || ''"></p>
+                        </div>
+                    </div>
+
+                    <!-- Hot Right Now -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+                            <i class="fas fa-bolt text-yellow-400"></i> Hot Right Now
+                        </h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <template x-for="track in recentTracks.slice(0, 6)" :key="track.id || track.title">
+                                <div class="glass glass-hover rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all"
+                                    @click="playTrack(track)">
+                                    <div class="w-12 h-12 rounded-lg bg-dark-600 flex-shrink-0 overflow-hidden">
+                                        <img x-show="track.albumArt" :src="track.albumArt"
+                                            class="w-full h-full object-cover" alt="">
+                                        <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center">
+                                            <i class="fas fa-music text-white/20"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                        <p class="text-xs text-white/50 truncate" x-text="track.artist"></p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span x-show="track.username" class="text-[10px] px-2 py-0.5 rounded-full bg-accent-purple/20 text-accent-purple"
+                                            x-text="track.username"></span>
+                                        <button class="text-white/30 hover:text-white transition-colors">
+                                            <i class="fas fa-play text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Activity Feed + Leaderboard -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Activity Feed -->
+                        <div class="lg:col-span-2">
+                            <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+                                <i class="fas fa-stream text-accent-blue"></i> Recent Activity
+                            </h3>
+                            <div class="space-y-2">
+                                <template x-for="track in recentTracks.slice(0, 12)" :key="(track.id || '') + track.title + track.artist">
+                                    <div class="glass glass-hover rounded-lg p-3 flex items-center gap-3 cursor-pointer transition-all"
+                                        @click="playTrack(track)">
+                                        <div class="w-10 h-10 rounded bg-dark-600 flex-shrink-0 overflow-hidden">
+                                            <img x-show="track.albumArt" :src="track.albumArt"
+                                                class="w-full h-full object-cover" alt="">
+                                            <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center">
+                                                <i class="fas fa-music text-white/20 text-xs"></i>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                            <p class="text-xs text-white/40">
+                                                <span x-text="track.artist"></span>
+                                                <span x-show="track.username"> &mdash; added by </span>
+                                                <span x-show="track.username" class="text-accent-purple" x-text="track.username"></span>
+                                            </p>
+                                        </div>
+                                        <div class="flex items-center gap-1.5">
+                                            <button @click.stop="toggleReaction(track, 'fire')"
+                                                :class="getReaction(track, 'fire') ? 'opacity-100' : 'opacity-30 hover:opacity-60'"
+                                                class="text-sm transition-opacity">&#128293;</button>
+                                            <button @click.stop="toggleReaction(track, 'heart')"
+                                                :class="getReaction(track, 'heart') ? 'opacity-100' : 'opacity-30 hover:opacity-60'"
+                                                class="text-sm transition-opacity">&#10084;&#65039;</button>
+                                            <button @click.stop="toggleReaction(track, 'hundred')"
+                                                :class="getReaction(track, 'hundred') ? 'opacity-100' : 'opacity-30 hover:opacity-60'"
+                                                class="text-sm transition-opacity">&#128175;</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Leaderboard -->
+                        <div>
+                            <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+                                <i class="fas fa-trophy text-yellow-400"></i> Leaderboard
+                            </h3>
+                            <div class="glass rounded-xl p-4 space-y-3">
+                                <template x-for="(user, index) in leaderboard" :key="user.username">
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-lg font-bold"
+                                            :class="index === 0 ? 'text-yellow-400' : index === 1 ? 'text-gray-300' : index === 2 ? 'text-amber-600' : 'text-white/30'"
+                                            x-text="'#' + (index + 1)"></span>
+                                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-accent-purple to-accent-pink flex items-center justify-center text-xs font-bold"
+                                            x-text="user.username.charAt(0).toUpperCase()"></div>
+                                        <div class="flex-1">
+                                            <p class="text-sm font-medium" x-text="user.username"></p>
+                                            <p class="text-xs text-white/40" x-text="user.count + ' tracks'"></p>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="leaderboard.length === 0" class="text-center text-white/30 text-sm py-4">
+                                    Loading...
+                                </div>
+                            </div>
+
+                            <!-- Top Artists -->
+                            <h3 class="text-lg font-semibold mb-3 mt-6 flex items-center gap-2">
+                                <i class="fas fa-star text-accent-pink"></i> Top Artists
+                            </h3>
+                            <div class="glass rounded-xl p-4 space-y-2">
+                                <template x-for="artist in topArtists.slice(0, 8)" :key="artist.name">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm text-white/80 truncate" x-text="artist.name"></span>
+                                        <span class="text-xs text-white/30" x-text="artist.count + ' tracks'"></span>
+                                    </div>
+                                </template>
+                                <div x-show="topArtists.length === 0" class="text-center text-white/30 text-sm py-4">
+                                    Loading...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Library Tab -->
+                <div x-show="activeTab === 'library'" x-cloak class="p-4 md:p-6 fade-in">
+
+                    <!-- Search + Sort -->
+                    <div class="flex flex-col sm:flex-row gap-3 mb-4">
+                        <div class="flex-1 relative">
+                            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-white/30"></i>
+                            <input type="text" x-model="searchQuery" @input="filterLibrary()"
+                                placeholder="Search tracks..."
+                                class="w-full pl-10 pr-4 py-2.5 bg-dark-700 border border-white/5 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none focus:border-accent-purple/50">
+                        </div>
+                        <div class="flex gap-2">
+                            <select x-model="sortBy" @change="sortLibrary()"
+                                class="px-3 py-2.5 bg-dark-700 border border-white/5 rounded-xl text-sm text-white/70 focus:outline-none focus:border-accent-purple/50">
+                                <option value="dateAdded">Date Added</option>
+                                <option value="title">Title</option>
+                                <option value="artist">Artist</option>
+                                <option value="username">Who Added</option>
+                            </select>
+                            <button @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; sortLibrary()"
+                                class="px-3 py-2.5 bg-dark-700 border border-white/5 rounded-xl text-sm text-white/50 hover:text-white transition-colors">
+                                <i :class="sortOrder === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Track Count -->
+                    <p class="text-xs text-white/30 mb-3">
+                        <span x-text="filteredLibrary.length"></span> tracks
+                    </p>
+
+                    <!-- Track List -->
+                    <div class="space-y-1">
+                        <template x-for="track in filteredLibrary" :key="track.id">
+                            <div class="glass-hover rounded-lg p-3 flex items-center gap-3 cursor-pointer transition-all group"
+                                :class="currentTrack && currentTrack.id === track.id ? 'bg-accent-purple/10 border border-accent-purple/20' : 'border border-transparent'"
+                                @click="playTrack(track)">
+                                <div class="w-10 h-10 rounded bg-dark-600 flex-shrink-0 overflow-hidden relative">
+                                    <img x-show="track.albumArt" :src="track.albumArt"
+                                        class="w-full h-full object-cover" alt="">
+                                    <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center">
+                                        <i class="fas fa-music text-white/20 text-xs"></i>
+                                    </div>
+                                    <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <i class="fas fa-play text-white text-xs"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                    <p class="text-xs text-white/40 truncate" x-text="track.artist + (track.album ? ' - ' + track.album : '')"></p>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span x-show="track.username" class="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/40 hidden sm:inline"
+                                        x-text="track.username"></span>
+                                    <span class="text-xs text-white/20" x-text="formatDuration(track.duration)"></span>
+                                    <button @click.stop="addToQueue(track)" class="text-white/20 hover:text-accent-purple transition-colors opacity-0 group-hover:opacity-100"
+                                        title="Add to queue">
+                                        <i class="fas fa-plus text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div x-show="filteredLibrary.length === 0 && !loading" class="text-center py-12 text-white/30">
+                        <i class="fas fa-search text-3xl mb-3 block"></i>
+                        <p>No tracks found</p>
+                    </div>
+                    <div x-show="loading" class="text-center py-12 text-white/30">
+                        <i class="fas fa-spinner fa-spin text-2xl mb-3 block"></i>
+                        <p>Loading library...</p>
+                    </div>
+                </div>
+
+                <!-- Social Tab -->
+                <div x-show="activeTab === 'social'" x-cloak class="p-4 md:p-6 fade-in">
+
+                    <!-- Now Playing -->
+                    <div x-show="currentTrack" class="glass rounded-2xl p-4 mb-6 flex items-center gap-4">
+                        <div class="w-16 h-16 rounded-xl bg-dark-600 overflow-hidden flex-shrink-0"
+                            :class="isPlaying ? 'album-art-glow' : ''">
+                            <img x-show="currentTrack && currentTrack.albumArt" :src="currentTrack ? currentTrack.albumArt : ''"
+                                class="w-full h-full object-cover" alt="">
+                            <div x-show="!currentTrack || !currentTrack.albumArt" class="w-full h-full flex items-center justify-center">
+                                <i class="fas fa-music text-white/20"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <p class="text-xs text-accent-purple uppercase tracking-wider">Now Playing</p>
+                            <p class="font-semibold" x-text="currentTrack ? currentTrack.title : ''"></p>
+                            <p class="text-sm text-white/50" x-text="currentTrack ? currentTrack.artist : ''"></p>
+                        </div>
+                    </div>
+
+                    <!-- User Profiles -->
+                    <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+                        <i class="fas fa-users text-accent-blue"></i> The Squad
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                        <template x-for="user in leaderboard" :key="user.username">
+                            <div class="glass rounded-xl p-4 cursor-pointer transition-all hover:border-accent-purple/30"
+                                :class="selectedUser === user.username ? 'border-accent-purple/50 bg-accent-purple/5' : ''"
+                                @click="selectedUser = selectedUser === user.username ? null : user.username">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-accent-purple to-accent-pink flex items-center justify-center font-bold"
+                                        x-text="user.username.charAt(0).toUpperCase()"></div>
+                                    <div>
+                                        <p class="font-medium" x-text="user.username"></p>
+                                        <p class="text-xs text-white/40" x-text="user.count + ' contributions'"></p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <span class="text-xs px-2 py-1 rounded-full bg-white/5 text-white/50">
+                                        <i class="fas fa-music mr-1"></i><span x-text="user.count"></span> tracks
+                                    </span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- User's Tracks -->
+                    <div x-show="selectedUser">
+                        <h3 class="text-lg font-semibold mb-3">
+                            <span x-text="selectedUser"></span>'s Submissions
+                        </h3>
+                        <div class="space-y-2">
+                            <template x-for="track in getUserTracks(selectedUser)" :key="track.id || track.title + track.artist">
+                                <div class="glass glass-hover rounded-lg p-3 flex items-center gap-3 cursor-pointer transition-all"
+                                    @click="playTrack(track)">
+                                    <div class="w-10 h-10 rounded bg-dark-600 flex-shrink-0 overflow-hidden">
+                                        <img x-show="track.albumArt" :src="track.albumArt"
+                                            class="w-full h-full object-cover" alt="">
+                                        <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center">
+                                            <i class="fas fa-music text-white/20 text-xs"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                        <p class="text-xs text-white/40 truncate" x-text="track.artist"></p>
+                                    </div>
+                                    <button @click.stop="addToQueue(track)" class="text-white/30 hover:text-accent-purple transition-colors">
+                                        <i class="fas fa-plus text-xs"></i>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Reactions Summary -->
+                    <div x-show="!selectedUser" class="mt-6">
+                        <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+                            <i class="fas fa-heart text-accent-pink"></i> Your Reactions
+                        </h3>
+                        <div class="glass rounded-xl p-4">
+                            <div x-show="Object.keys(reactions).length === 0" class="text-center text-white/30 text-sm py-4">
+                                React to songs to see them here!
+                            </div>
+                            <div class="space-y-2">
+                                <template x-for="(rxn, trackId) in reactions" :key="trackId">
+                                    <div class="flex items-center gap-2 text-sm">
+                                        <span x-text="getTrackTitle(trackId)" class="flex-1 truncate text-white/70"></span>
+                                        <span x-show="rxn.fire">&#128293;</span>
+                                        <span x-show="rxn.heart">&#10084;&#65039;</span>
+                                        <span x-show="rxn.hundred">&#128175;</span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Queue Panel -->
+            <div x-show="showQueue" x-cloak
+                class="absolute right-0 top-0 bottom-0 w-80 glass border-l border-white/5 overflow-y-auto scrollbar-thin z-40 fade-in"
+                @click.outside="showQueue = false">
+                <div class="p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-semibold flex items-center gap-2">
+                            <i class="fas fa-list-ol text-accent-purple"></i> Queue
+                            <span class="text-xs text-white/30" x-text="'(' + queue.length + ')'"></span>
+                        </h3>
+                        <button @click="queue = []" class="text-xs text-white/30 hover:text-white/60 transition-colors"
+                            x-show="queue.length > 0">
+                            Clear all
+                        </button>
+                    </div>
+
+                    <div x-show="queue.length === 0" class="text-center text-white/30 text-sm py-8">
+                        <i class="fas fa-music text-2xl mb-2 block"></i>
+                        <p>Queue is empty</p>
+                        <p class="text-xs mt-1">Click + on any track to add it</p>
+                    </div>
+
+                    <div class="space-y-1">
+                        <template x-for="(track, index) in queue" :key="index + '-' + track.id">
+                            <div class="queue-item rounded-lg p-2.5 flex items-center gap-2.5">
+                                <span class="text-xs text-white/20 w-4" x-text="index + 1"></span>
+                                <div class="w-8 h-8 rounded bg-dark-600 flex-shrink-0 overflow-hidden">
+                                    <img x-show="track.albumArt" :src="track.albumArt"
+                                        class="w-full h-full object-cover" alt="">
+                                    <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center">
+                                        <i class="fas fa-music text-white/20 text-[8px]"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-xs font-medium truncate" x-text="track.title"></p>
+                                    <p class="text-[10px] text-white/40 truncate" x-text="track.artist"></p>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <button @click="moveInQueue(index, -1)" x-show="index > 0"
+                                        class="text-white/20 hover:text-white/60 transition-colors p-0.5">
+                                        <i class="fas fa-chevron-up text-[9px]"></i>
+                                    </button>
+                                    <button @click="moveInQueue(index, 1)" x-show="index < queue.length - 1"
+                                        class="text-white/20 hover:text-white/60 transition-colors p-0.5">
+                                        <i class="fas fa-chevron-down text-[9px]"></i>
+                                    </button>
+                                    <button @click="removeFromQueue(index)"
+                                        class="text-white/20 hover:text-red-400 transition-colors p-0.5 ml-1">
+                                        <i class="fas fa-times text-[9px]"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Player Bar -->
+        <div class="glass border-t border-white/5 px-3 sm:px-6 py-3 flex items-center gap-3 sm:gap-4 z-50 fixed bottom-0 left-0 right-0 bg-dark-900/95 backdrop-blur-xl">
+
+            <!-- Track Info -->
+            <div class="flex items-center gap-3 w-1/4 min-w-0">
+                <div class="w-11 h-11 rounded-lg bg-dark-600 flex-shrink-0 overflow-hidden"
+                    :class="isPlaying ? 'album-art-glow' : ''">
+                    <img x-show="currentTrack && currentTrack.albumArt" :src="currentTrack ? currentTrack.albumArt : ''"
+                        class="w-full h-full object-cover" alt="">
+                    <div x-show="!currentTrack || !currentTrack.albumArt" class="w-full h-full flex items-center justify-center">
+                        <i class="fas fa-music text-white/20"></i>
+                    </div>
+                </div>
+                <div class="min-w-0 hidden sm:block">
+                    <p class="text-sm font-medium truncate" x-text="currentTrack ? currentTrack.title : 'No track selected'"></p>
+                    <p class="text-xs text-white/40 truncate" x-text="currentTrack ? currentTrack.artist : ''"></p>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex-1 flex flex-col items-center gap-1.5">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <button @click="toggleShuffle()"
+                        :class="shuffle ? 'text-accent-purple' : 'text-white/30 hover:text-white/60'"
+                        class="transition-colors hidden sm:block">
+                        <i class="fas fa-shuffle text-xs"></i>
+                    </button>
+                    <button @click="playPrev()" class="text-white/50 hover:text-white transition-colors">
+                        <i class="fas fa-backward-step"></i>
+                    </button>
+                    <button @click="togglePlay()"
+                        class="w-9 h-9 rounded-full bg-white flex items-center justify-center text-dark-900 hover:scale-105 transition-transform">
+                        <i :class="isPlaying ? 'fas fa-pause' : 'fas fa-play'" class="text-sm" :style="!isPlaying ? 'margin-left: 2px' : ''"></i>
+                    </button>
+                    <button @click="playNext()" class="text-white/50 hover:text-white transition-colors">
+                        <i class="fas fa-forward-step"></i>
+                    </button>
+                    <button @click="toggleShuffle()"
+                        :class="shuffle ? 'text-accent-purple' : 'text-white/30 hover:text-white/60'"
+                        class="transition-colors sm:hidden">
+                        <i class="fas fa-shuffle text-xs"></i>
+                    </button>
+                </div>
+                <!-- Progress -->
+                <div class="flex items-center gap-2 w-full max-w-lg">
+                    <span class="text-[10px] text-white/30 w-8 text-right" x-text="formatTime(currentTime)"></span>
+                    <input type="range" min="0" :max="duration || 100" :value="currentTime"
+                        @input="seek($event.target.value)" @change="seek($event.target.value)"
+                        class="flex-1 cursor-pointer">
+                    <span class="text-[10px] text-white/30 w-8" x-text="formatTime(duration)"></span>
+                </div>
+            </div>
+
+            <!-- Volume -->
+            <div class="flex items-center gap-2 w-1/6 justify-end">
+                <button @click="toggleMute()" class="text-white/40 hover:text-white/70 transition-colors hidden sm:block">
+                    <i :class="volume === 0 ? 'fas fa-volume-xmark' : volume < 0.5 ? 'fas fa-volume-low' : 'fas fa-volume-high'" class="text-xs"></i>
+                </button>
+                <input type="range" min="0" max="1" step="0.01" :value="volume"
+                    @input="setVolume($event.target.value)"
+                    class="w-20 cursor-pointer hidden sm:block">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function app() {
+            return {
+                // State
+                activeTab: 'discovery',
+                showQueue: false,
+                loading: true,
+
+                // Player
+                currentTrack: null,
+                isPlaying: false,
+                currentTime: 0,
+                duration: 0,
+                volume: 0.8,
+                previousVolume: 0.8,
+                shuffle: false,
+                howl: null,
+                progressInterval: null,
+
+                // Data
+                library: [],
+                filteredLibrary: [],
+                recentTracks: [],
+                leaderboard: [],
+                topArtists: [],
+                queue: [],
+                reactions: {},
+
+                // Search / Sort
+                searchQuery: '',
+                sortBy: 'dateAdded',
+                sortOrder: 'desc',
+
+                // Social
+                selectedUser: null,
+                vibeText: '',
+                vibeSubtext: '',
+
+                // Slaptastic data cache
+                slaptasticTracks: [],
+
+                async init() {
+                    // Load reactions from localStorage
+                    const saved = localStorage.getItem('slaplayer_reactions');
+                    if (saved) this.reactions = JSON.parse(saved);
+
+                    // Load data in parallel
+                    await Promise.all([
+                        this.loadSlaptasticData(),
+                        this.loadJellyfinLibrary(),
+                    ]);
+
+                    this.loading = false;
+                    this.generateVibe();
+                },
+
+                async loadSlaptasticData() {
+                    try {
+                        const [recentRes, leaderboardRes, artistsRes] = await Promise.all([
+                            fetch('/api/v1/dashboard/recent').then(r => r.json()).catch(() => ({ tracks: [] })),
+                            fetch('/api/v1/dashboard/leaderboard').then(r => r.json()).catch(() => ({ leaderboard: [] })),
+                            fetch('/api/v1/dashboard/artists').then(r => r.json()).catch(() => ({ artists: [] })),
+                        ]);
+
+                        this.slaptasticTracks = recentRes.tracks || recentRes || [];
+                        this.leaderboard = (leaderboardRes.leaderboard || leaderboardRes || []).map(item => ({
+                            username: item.username || item.user || item.name || 'Unknown',
+                            count: item.count || item.tracks || item.total || 0,
+                        }));
+                        this.topArtists = (artistsRes.artists || artistsRes || []).map(item => ({
+                            name: item.artist || item.name || 'Unknown',
+                            count: item.count || item.tracks || 0,
+                        }));
+                    } catch (e) {
+                        console.warn('Failed to load slaptastic data:', e);
+                    }
+                },
+
+                async loadJellyfinLibrary() {
+                    try {
+                        const res = await fetch('/jelly/Items?IncludeItemTypes=Audio&Recursive=true&SortBy=DateCreated&SortOrder=Descending&Fields=DateCreated,MediaSources', {
+                            headers: { 'X-Emby-Token': 'ff64cc99f3dd46cbb9b2f264add3ceb3' }
+                        });
+                        const data = await res.json();
+                        const items = data.Items || [];
+
+                        this.library = items.map(item => this.mapJellyfinItem(item));
+                        this.filteredLibrary = [...this.library];
+
+                        // Build recent tracks (merge with slaptastic data)
+                        this.buildRecentTracks();
+                    } catch (e) {
+                        console.warn('Failed to load Jellyfin library:', e);
+                    }
+                },
+
+                mapJellyfinItem(item) {
+                    const track = {
+                        id: item.Id,
+                        title: item.Name || 'Unknown',
+                        artist: (item.Artists && item.Artists[0]) || item.AlbumArtist || 'Unknown Artist',
+                        album: item.Album || '',
+                        duration: item.RunTimeTicks ? Math.floor(item.RunTimeTicks / 10000000) : 0,
+                        dateAdded: item.DateCreated || '',
+                        albumArt: item.ImageTags && item.ImageTags.Primary
+                            ? `/jelly/Items/${item.Id}/Images/Primary?maxHeight=300&api_key=ff64cc99f3dd46cbb9b2f264add3ceb3`
+                            : (item.AlbumId ? `/jelly/Items/${item.AlbumId}/Images/Primary?maxHeight=300&api_key=ff64cc99f3dd46cbb9b2f264add3ceb3` : ''),
+                        streamUrl: `/jelly/Audio/${item.Id}/universal?api_key=ff64cc99f3dd46cbb9b2f264add3ceb3&audioCodec=aac`,
+                        username: null,
+                    };
+
+                    // Try to match with slaptastic data
+                    const match = this.slaptasticTracks.find(st => {
+                        const stTitle = (st.title || st.name || '').toLowerCase().trim();
+                        const stArtist = (st.artist || '').toLowerCase().trim();
+                        return stTitle === track.title.toLowerCase().trim() &&
+                               stArtist === track.artist.toLowerCase().trim();
+                    });
+                    if (match) {
+                        track.username = match.username || match.user || null;
+                    }
+
+                    return track;
+                },
+
+                buildRecentTracks() {
+                    // Use library sorted by date, enriched with slaptastic usernames
+                    this.recentTracks = this.library.slice(0, 20);
+                },
+
+                generateVibe() {
+                    const vibes = [
+                        { text: 'Late Night Energy', sub: 'The squad is adding bangers past midnight' },
+                        { text: 'Discovery Mode', sub: 'Fresh tracks incoming from the team' },
+                        { text: 'Main Character Energy', sub: 'Everyone is the protagonist today' },
+                        { text: 'Chill Vibes Only', sub: 'Easy listening from the collective' },
+                        { text: 'Genre Chaos', sub: 'From hip-hop to hyperpop in one playlist' },
+                        { text: 'Taste Unlocked', sub: 'The algorithm could never' },
+                    ];
+                    const vibe = vibes[Math.floor(Math.random() * vibes.length)];
+                    this.vibeText = vibe.text;
+                    this.vibeSubtext = vibe.sub;
+                },
+
+                // Player controls
+                playTrack(track) {
+                    if (!track || !track.id) return;
+
+                    // Stop current track
+                    if (this.howl) {
+                        this.howl.unload();
+                        this.howl = null;
+                    }
+                    if (this.progressInterval) {
+                        clearInterval(this.progressInterval);
+                    }
+
+                    this.currentTrack = track;
+                    this.currentTime = 0;
+                    this.duration = track.duration || 0;
+
+                    this.howl = new Howl({
+                        src: [track.streamUrl],
+                        html5: true,
+                        volume: this.volume,
+                        onplay: () => {
+                            this.isPlaying = true;
+                            this.duration = this.howl.duration() || track.duration || 0;
+                            this.startProgress();
+                        },
+                        onpause: () => {
+                            this.isPlaying = false;
+                        },
+                        onend: () => {
+                            this.isPlaying = false;
+                            this.currentTime = 0;
+                            this.playNext();
+                        },
+                        onloaderror: (id, err) => {
+                            console.error('Load error:', err);
+                        },
+                        onplayerror: (id, err) => {
+                            console.error('Play error:', err);
+                        },
+                    });
+
+                    this.howl.play();
+                },
+
+                togglePlay() {
+                    if (!this.howl && this.currentTrack) {
+                        this.playTrack(this.currentTrack);
+                        return;
+                    }
+                    if (!this.howl) {
+                        // Play first track in library
+                        if (this.library.length > 0) {
+                            this.playTrack(this.library[0]);
+                        }
+                        return;
+                    }
+
+                    if (this.isPlaying) {
+                        this.howl.pause();
+                    } else {
+                        this.howl.play();
+                    }
+                },
+
+                playNext() {
+                    if (this.queue.length > 0) {
+                        const next = this.queue.shift();
+                        this.playTrack(next);
+                        return;
+                    }
+
+                    if (!this.currentTrack || this.library.length === 0) return;
+
+                    if (this.shuffle) {
+                        const randomIndex = Math.floor(Math.random() * this.library.length);
+                        this.playTrack(this.library[randomIndex]);
+                    } else {
+                        const currentIndex = this.library.findIndex(t => t.id === this.currentTrack.id);
+                        const nextIndex = (currentIndex + 1) % this.library.length;
+                        this.playTrack(this.library[nextIndex]);
+                    }
+                },
+
+                playPrev() {
+                    if (!this.currentTrack || this.library.length === 0) return;
+
+                    // If more than 3 seconds in, restart current track
+                    if (this.currentTime > 3) {
+                        this.seek(0);
+                        return;
+                    }
+
+                    const currentIndex = this.library.findIndex(t => t.id === this.currentTrack.id);
+                    const prevIndex = currentIndex <= 0 ? this.library.length - 1 : currentIndex - 1;
+                    this.playTrack(this.library[prevIndex]);
+                },
+
+                seek(value) {
+                    if (this.howl) {
+                        this.howl.seek(parseFloat(value));
+                        this.currentTime = parseFloat(value);
+                    }
+                },
+
+                setVolume(value) {
+                    this.volume = parseFloat(value);
+                    if (this.howl) {
+                        this.howl.volume(this.volume);
+                    }
+                },
+
+                toggleMute() {
+                    if (this.volume > 0) {
+                        this.previousVolume = this.volume;
+                        this.setVolume(0);
+                    } else {
+                        this.setVolume(this.previousVolume || 0.8);
+                    }
+                },
+
+                toggleShuffle() {
+                    this.shuffle = !this.shuffle;
+                },
+
+                startProgress() {
+                    if (this.progressInterval) clearInterval(this.progressInterval);
+                    this.progressInterval = setInterval(() => {
+                        if (this.howl && this.isPlaying) {
+                            this.currentTime = this.howl.seek() || 0;
+                            const d = this.howl.duration();
+                            if (d && d > 0) this.duration = d;
+                        }
+                    }, 500);
+                },
+
+                // Queue
+                addToQueue(track) {
+                    this.queue.push({...track});
+                },
+
+                removeFromQueue(index) {
+                    this.queue.splice(index, 1);
+                },
+
+                moveInQueue(index, direction) {
+                    const newIndex = index + direction;
+                    if (newIndex < 0 || newIndex >= this.queue.length) return;
+                    const temp = this.queue[index];
+                    this.queue[index] = this.queue[newIndex];
+                    this.queue[newIndex] = temp;
+                    // Force reactivity
+                    this.queue = [...this.queue];
+                },
+
+                // Library
+                filterLibrary() {
+                    const q = this.searchQuery.toLowerCase().trim();
+                    if (!q) {
+                        this.filteredLibrary = [...this.library];
+                    } else {
+                        this.filteredLibrary = this.library.filter(t =>
+                            t.title.toLowerCase().includes(q) ||
+                            t.artist.toLowerCase().includes(q) ||
+                            (t.album && t.album.toLowerCase().includes(q)) ||
+                            (t.username && t.username.toLowerCase().includes(q))
+                        );
+                    }
+                    this.sortLibrary();
+                },
+
+                sortLibrary() {
+                    const dir = this.sortOrder === 'asc' ? 1 : -1;
+                    this.filteredLibrary.sort((a, b) => {
+                        let va, vb;
+                        switch (this.sortBy) {
+                            case 'title':
+                                va = a.title.toLowerCase();
+                                vb = b.title.toLowerCase();
+                                break;
+                            case 'artist':
+                                va = a.artist.toLowerCase();
+                                vb = b.artist.toLowerCase();
+                                break;
+                            case 'username':
+                                va = (a.username || 'zzz').toLowerCase();
+                                vb = (b.username || 'zzz').toLowerCase();
+                                break;
+                            case 'dateAdded':
+                            default:
+                                va = a.dateAdded || '';
+                                vb = b.dateAdded || '';
+                                break;
+                        }
+                        if (va < vb) return -1 * dir;
+                        if (va > vb) return 1 * dir;
+                        return 0;
+                    });
+                },
+
+                // Reactions
+                toggleReaction(track, type) {
+                    const key = track.id || (track.title + '::' + track.artist);
+                    if (!this.reactions[key]) {
+                        this.reactions[key] = { fire: false, heart: false, hundred: false };
+                    }
+                    this.reactions[key][type] = !this.reactions[key][type];
+
+                    // Clean up empty reactions
+                    if (!this.reactions[key].fire && !this.reactions[key].heart && !this.reactions[key].hundred) {
+                        delete this.reactions[key];
+                    }
+
+                    // Force reactivity
+                    this.reactions = {...this.reactions};
+                    localStorage.setItem('slaplayer_reactions', JSON.stringify(this.reactions));
+                },
+
+                getReaction(track, type) {
+                    const key = track.id || (track.title + '::' + track.artist);
+                    return this.reactions[key] && this.reactions[key][type];
+                },
+
+                getTrackTitle(trackId) {
+                    const track = this.library.find(t => t.id === trackId);
+                    if (track) return track.title + ' - ' + track.artist;
+                    return trackId;
+                },
+
+                // Social
+                getUserTracks(username) {
+                    if (!username) return [];
+                    return this.library.filter(t => t.username && t.username.toLowerCase() === username.toLowerCase());
+                },
+
+                // Formatting
+                formatTime(seconds) {
+                    if (!seconds || isNaN(seconds)) return '0:00';
+                    const mins = Math.floor(seconds / 60);
+                    const secs = Math.floor(seconds % 60);
+                    return `${mins}:${secs.toString().padStart(2, '0')}`;
+                },
+
+                formatDuration(seconds) {
+                    if (!seconds) return '';
+                    return this.formatTime(seconds);
+                },
+            };
+        }
+    </script>
+</body>
+</html>

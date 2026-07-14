@@ -1,0 +1,13 @@
+services:
+  slaplayer:
+    build: .
+    container_name: slaplayer
+    restart: unless-stopped
+    ports:
+      - "3088:80"
+    networks:
+      - slaptastic_default
+
+networks:
+  slaptastic_default:
+    external: true
