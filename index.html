@@ -756,11 +756,12 @@
                 },
 
                 async loadSlaptasticData() {
+                    const SLAP_API = 'https://slap.qureshi.io/api/v1/dashboard';
                     try {
                         const [recentRes, leaderboardRes, artistsRes] = await Promise.all([
-                            fetch('/api/v1/dashboard/recent').then(r => r.json()).catch(() => ({ tracks: [] })),
-                            fetch('/api/v1/dashboard/leaderboard').then(r => r.json()).catch(() => ({ leaderboard: [] })),
-                            fetch('/api/v1/dashboard/artists').then(r => r.json()).catch(() => ({ artists: [] })),
+                            fetch(`${SLAP_API}/recent`).then(r => r.json()).catch(() => ({ items: [] })),
+                            fetch(`${SLAP_API}/leaderboard`).then(r => r.json()).catch(() => ({ entries: [] })),
+                            fetch(`${SLAP_API}/artists`).then(r => r.json()).catch(() => ({ artists: [] })),
                         ]);
 
                         this.slaptasticTracks = recentRes.tracks || recentRes || [];
