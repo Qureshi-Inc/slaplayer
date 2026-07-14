@@ -318,7 +318,8 @@
                             </h3>
                             <div class="glass rounded-xl p-4 space-y-2">
                                 <template x-for="artist in topArtists.slice(0, 8)" :key="artist.name">
-                                    <div class="flex items-center justify-between">
+                                    <div class="flex items-center justify-between cursor-pointer hover:bg-white/5 rounded-lg px-2 py-1 -mx-2 transition-colors"
+                                        @click="viewArtist(artist.name)">
                                         <span class="text-sm text-white/80 truncate" x-text="artist.name"></span>
                                         <span class="text-xs text-white/30" x-text="artist.count + ' tracks'"></span>
                                     </div>
@@ -479,8 +480,93 @@
                         </div>
                     </div>
 
+                    <!-- Playlists -->
+                    <div x-show="!selectedUser && !selectedArtist" class="mt-6 mb-6">
+                        <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+                            <i class="fas fa-list text-accent-blue"></i> Playlists
+                            <span class="text-xs text-white/30" x-text="'(' + playlists.length + ')'"></span>
+                        </h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" x-show="!selectedPlaylist">
+                            <template x-for="pl in playlists" :key="pl.id">
+                                <div class="glass glass-hover rounded-xl p-4 cursor-pointer transition-all"
+                                    @click="loadPlaylistTracks(pl)">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center">
+                                            <i class="fas fa-list-ol text-white text-sm"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium text-sm" x-text="pl.name"></p>
+                                            <p class="text-xs text-white/40" x-text="pl.itemCount + ' tracks'"></p>
+                                        </div>
+                                    </div>
+                                    <button @click.stop="playPlaylist(pl)" class="mt-2 text-xs text-accent-purple hover:text-white transition-colors">
+                                        <i class="fas fa-play mr-1"></i> Play all
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                        <!-- Playlist tracks view -->
+                        <div x-show="selectedPlaylist">
+                            <div class="flex items-center gap-2 mb-3">
+                                <button @click="selectedPlaylist = null; playlistTracks = []" class="text-white/50 hover:text-white">
+                                    <i class="fas fa-arrow-left"></i>
+                                </button>
+                                <h4 class="font-medium" x-text="selectedPlaylist?.name"></h4>
+                                <button @click="playPlaylist(selectedPlaylist)" class="ml-auto text-xs px-3 py-1 rounded-full bg-accent-purple/20 text-accent-purple hover:bg-accent-purple/30">
+                                    <i class="fas fa-play mr-1"></i> Play all
+                                </button>
+                            </div>
+                            <div class="space-y-2">
+                                <template x-for="track in playlistTracks" :key="track.id">
+                                    <div class="glass glass-hover rounded-lg p-3 flex items-center gap-3 cursor-pointer" @click="playTrack(track)">
+                                        <div class="w-10 h-10 rounded bg-dark-600 flex-shrink-0 overflow-hidden">
+                                            <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover">
+                                            <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center">
+                                                <i class="fas fa-music text-white/20 text-xs"></i>
+                                            </div>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                            <p class="text-xs text-white/40 truncate" x-text="track.artist"></p>
+                                        </div>
+                                        <button @click.stop="addToQueue(track)" class="text-white/30 hover:text-accent-purple">
+                                            <i class="fas fa-plus text-xs"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Artist View -->
+                    <div x-show="selectedArtist" class="mt-6">
+                        <div class="flex items-center gap-2 mb-3">
+                            <button @click="selectedArtist = null" class="text-white/50 hover:text-white">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <h3 class="text-lg font-semibold" x-text="selectedArtist"></h3>
+                        </div>
+                        <div class="space-y-2">
+                            <template x-for="track in getArtistTracks(selectedArtist)" :key="track.id">
+                                <div class="glass glass-hover rounded-lg p-3 flex items-center gap-3 cursor-pointer" @click="playTrack(track)">
+                                    <div class="w-10 h-10 rounded bg-dark-600 flex-shrink-0 overflow-hidden">
+                                        <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover">
+                                        <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center">
+                                            <i class="fas fa-music text-white/20 text-xs"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                        <p class="text-xs text-white/40 truncate" x-text="track.album"></p>
+                                    </div>
+                                    <span x-show="track.username" class="text-[10px] px-2 py-0.5 rounded-full bg-accent-purple/20 text-accent-purple" x-text="track.username"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
                     <!-- Reactions Summary -->
-                    <div x-show="!selectedUser" class="mt-6">
+                    <div x-show="!selectedUser && !selectedArtist && !selectedPlaylist" class="mt-6">
                         <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
                             <i class="fas fa-heart text-accent-pink"></i> Your Reactions
                         </h3>
@@ -641,6 +727,10 @@
                 activeTab: 'discovery',
                 showQueue: false,
                 loading: true,
+                playlists: [],
+                selectedPlaylist: null,
+                playlistTracks: [],
+                selectedArtist: null,
 
                 // Player
                 currentTrack: null,
@@ -749,10 +839,55 @@
                     await Promise.all([
                         this.loadSlaptasticData(),
                         this.loadJellyfinLibrary(),
+                        this.loadPlaylists(),
                     ]);
 
                     this.loading = false;
                     this.generateVibe();
+                },
+
+                async loadPlaylists() {
+                    if (!this.jellyfinUrl || !this.jellyfinToken) return;
+                    try {
+                        const res = await fetch(`${this.jellyfinUrl}/Items?IncludeItemTypes=Playlist&Recursive=true`, {
+                            headers: { 'X-Emby-Token': this.jellyfinToken }
+                        });
+                        if (!res.ok) return;
+                        const data = await res.json();
+                        this.playlists = (data.Items || []).map(p => ({
+                            id: p.Id,
+                            name: p.Name,
+                            itemCount: p.ChildCount || 0,
+                        }));
+                        console.log('[SlapPlayer] Loaded', this.playlists.length, 'playlists');
+                    } catch (e) {
+                        console.warn('[SlapPlayer] Failed to load playlists:', e);
+                    }
+                },
+
+                async loadPlaylistTracks(playlist) {
+                    this.selectedPlaylist = playlist;
+                    this.playlistTracks = [];
+                    try {
+                        const session = JSON.parse(localStorage.getItem('slaplayer_session') || '{}');
+                        const res = await fetch(`${this.jellyfinUrl}/Playlists/${playlist.id}/Items?UserId=${session.userId}`, {
+                            headers: { 'X-Emby-Token': this.jellyfinToken }
+                        });
+                        if (!res.ok) return;
+                        const data = await res.json();
+                        this.playlistTracks = (data.Items || []).map(item => this.mapJellyfinItem(item));
+                    } catch (e) {
+                        console.warn('[SlapPlayer] Failed to load playlist tracks:', e);
+                    }
+                },
+
+                playPlaylist(playlist) {
+                    this.loadPlaylistTracks(playlist).then(() => {
+                        if (this.playlistTracks.length > 0) {
+                            this.queue = [...this.playlistTracks];
+                            this.playTrack(this.queue[0]);
+                        }
+                    });
                 },
 
                 async loadSlaptasticData() {
@@ -780,12 +915,26 @@
                 },
 
                 async loadJellyfinLibrary() {
+                    if (!this.jellyfinUrl || !this.jellyfinToken) {
+                        console.warn('Jellyfin not configured, skipping library load');
+                        return;
+                    }
                     try {
+                        console.log('[SlapPlayer] Loading library from:', this.jellyfinUrl);
                         const res = await fetch(`${this.jellyfinUrl}/Items?IncludeItemTypes=Audio&Recursive=true&SortBy=DateCreated&SortOrder=Descending&Fields=DateCreated,MediaSources`, {
                             headers: { 'X-Emby-Token': this.jellyfinToken }
                         });
+                        if (!res.ok) {
+                            console.error('[SlapPlayer] Jellyfin API error:', res.status);
+                            // Token might be expired — clear session
+                            if (res.status === 401) {
+                                this.logout();
+                            }
+                            return;
+                        }
                         const data = await res.json();
                         const items = data.Items || [];
+                        console.log('[SlapPlayer] Loaded', items.length, 'tracks from Jellyfin');
 
                         this.library = items.map(item => this.mapJellyfinItem(item));
                         this.filteredLibrary = [...this.library];
@@ -793,7 +942,7 @@
                         // Build recent tracks (merge with slaptastic data)
                         this.buildRecentTracks();
                     } catch (e) {
-                        console.warn('Failed to load Jellyfin library:', e);
+                        console.error('[SlapPlayer] Failed to load Jellyfin library:', e);
                     }
                 },
 
@@ -808,7 +957,7 @@
                         albumArt: item.ImageTags && item.ImageTags.Primary
                             ? `${this.jellyfinUrl}/Items/${item.Id}/Images/Primary?maxHeight=300&api_key=${this.jellyfinToken}`
                             : (item.AlbumId ? `${this.jellyfinUrl}/Items/${item.AlbumId}/Images/Primary?maxHeight=300&api_key=${this.jellyfinToken}` : ''),
-                        streamUrl: `${this.jellyfinUrl}/Audio/${item.Id}/universal?api_key=${this.jellyfinToken}&audioCodec=aac`,
+                        streamUrl: `${this.jellyfinUrl}/Audio/${item.Id}/universal?api_key=${this.jellyfinToken}&audioCodec=aac&Container=mp3,aac,m4a,opus,flac&TranscodingContainer=ts&TranscodingProtocol=hls`,
                         username: null,
                     };
 
@@ -1078,6 +1227,16 @@
                 getUserTracks(username) {
                     if (!username) return [];
                     return this.library.filter(t => t.username && t.username.toLowerCase() === username.toLowerCase());
+                },
+
+                getArtistTracks(artist) {
+                    if (!artist) return [];
+                    return this.library.filter(t => t.artist && t.artist.toLowerCase() === artist.toLowerCase());
+                },
+
+                viewArtist(artistName) {
+                    this.selectedArtist = artistName;
+                    this.activeTab = 'social';
                 },
 
                 // Formatting
