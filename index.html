@@ -2045,9 +2045,14 @@ function app() {
             const atIdx = text.lastIndexOf('@');
             if (atIdx === -1 || atIdx < text.length - 20) { this.mentionSuggestions = []; return; }
             const query = text.slice(atIdx + 1).toLowerCase();
-            if (query.includes(' ') || query.length === 0) { this.mentionSuggestions = []; return; }
+            if (query.includes(' ')) { this.mentionSuggestions = []; return; }
+            const me = this.getDashboardUsername();
             const allUsers = this.leaderboard.map(u => u.username);
-            this.mentionSuggestions = allUsers.filter(u => u.toLowerCase().startsWith(query) && u !== this.username);
+            if (query.length === 0) {
+                this.mentionSuggestions = allUsers.filter(u => u !== me);
+            } else {
+                this.mentionSuggestions = allUsers.filter(u => u.toLowerCase().startsWith(query) && u !== me);
+            }
         },
 
         insertMention(user) {
