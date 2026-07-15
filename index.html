@@ -819,7 +819,10 @@
     <div x-show="showActivityDetail" x-cloak x-transition
         class="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm flex items-end justify-center"
         @click.self="showActivityDetail = false">
-        <div class="w-full max-w-lg glass-strong rounded-t-2xl p-5 space-y-4 slide-up">
+        <div class="w-full max-w-lg glass-strong rounded-t-2xl p-5 space-y-4 slide-up"
+            @touchstart="detailSwipeY = $event.touches[0].clientY; detailSwipeStarted = true"
+            @touchmove="if (detailSwipeStarted && $event.touches[0].clientY - detailSwipeY > 60) { showActivityDetail = false; detailSwipeStarted = false; }"
+            @touchend="detailSwipeStarted = false">
             <div class="w-10 h-1 rounded-full bg-white/20 mx-auto -mt-1 mb-2"></div>
             <div class="flex items-center gap-4" x-show="activityDetailTrack">
                 <div class="w-20 h-20 rounded-xl bg-dark-600 overflow-hidden flex-shrink-0">
@@ -1078,7 +1081,7 @@ function app() {
         jellyfinUrl: '', jellyfinToken: '', userId: '', username: '',
 
         activeTab: 'discovery', showQueue: false, showNotifications: false,
-        showFullPlayer: false, showComments: false, showEditModal: false, playerSwipeY: 0, playerSwipeStarted: false,
+        showFullPlayer: false, showComments: false, showEditModal: false, playerSwipeY: 0, playerSwipeStarted: false, detailSwipeY: 0, detailSwipeStarted: false,
         loading: true, toastMessage: '',
         librarySubTab: 'songs', selectedAlbum: null, selectedArtist: null, selectedGenre: null,
 
