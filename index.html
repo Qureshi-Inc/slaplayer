@@ -1604,44 +1604,35 @@ function app() {
 
         async handleStreamError(e) {
             const errorCode = this.audio?.error?.code;
-            const httpStatus = this.audio?.error?.message;
 
-            // Detect auth errors (401/403)
-            if (httpStatus && (httpStatus.includes('401') || httpStatus.includes('403'))) {
-                if (this.retryCount < this.maxRetries) {
-                    this.showToast('Re-authenticating...');
-                    await this.reAuthenticate();
-                    this.retryCurrentTrack();
-                } else {
-                    this.showToast('Auth failed, please re-login');
-                    this.skipToNext();
-                }
+            // Always increment retry count
+            this.retryCount++;
+
+            // If we've exhausted retries, pause instead of skipping
+            if (this.retryCount > this.maxRetries) {
+                this.showToast('Playback issue — tap play to retry');
+                this.isPlaying = false;
+                return;
             }
-            // Network errors
-            else if (errorCode === MediaError.MEDIA_ERR_NETWORK) {
-                if (this.retryCount < this.maxRetries) {
-                    this.retryCount++;
-                    this.showToast('Connection lost, retrying...');
-                    setTimeout(() => this.retryCurrentTrack(), 2000 * this.retryCount);
-                } else {
-                    this.showToast('Connection failed, skipping...');
-                    this.skipToNext();
-                }
+
+            // Network errors — retry with backoff
+            if (errorCode === MediaError.MEDIA_ERR_NETWORK) {
+                this.showToast('Connection issue, retrying...');
+                setTimeout(() => this.retryCurrentTrack(), 2000 * this.retryCount);
             }
-            // Missing track (404)
+            // Source not supported — could be transient on mobile, retry once
             else if (errorCode === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
-                this.showToast('Track unavailable, skipping...');
-                this.skipToNext();
-            }
-            // Other errors
-            else {
-                if (this.retryCount < this.maxRetries) {
-                    this.retryCount++;
-                    setTimeout(() => this.retryCurrentTrack(), 2000);
+                if (this.retryCount <= 1) {
+                    setTimeout(() => this.retryCurrentTrack(), 1000);
                 } else {
-                    this.showToast('Playback error, skipping...');
-                    this.skipToNext();
+                    this.showToast('Track unavailable');
+                    this.isPlaying = false;
                 }
+            }
+            // All other errors — retry with backoff
+            else {
+                this.showToast('Retrying...');
+                setTimeout(() => this.retryCurrentTrack(), 2000 * this.retryCount);
             }
         },
 
@@ -1781,13 +1772,20 @@ function app() {
                 this.handleStreamError(e);
             });
 
-            // Handle stalled streams (no data for 10 seconds)
+            // Handle stalled streams — only retry if actually stuck for 15s+
+            let stalledTimer = null;
             this.audio.addEventListener('stalled', () => {
-                console.warn('Stream stalled, attempting retry...');
-                if (this.retryCount < this.maxRetries) {
-                    this.retryCurrentTrack();
-                }
+                if (stalledTimer) return;
+                stalledTimer = setTimeout(() => {
+                    stalledTimer = null;
+                    if (this.isPlaying && this.retryCount < this.maxRetries) {
+                        this.retryCount++;
+                        this.showToast('Stream stalled, retrying...');
+                        this.retryCurrentTrack();
+                    }
+                }, 15000);
             });
+            this.audio.addEventListener('playing', () => { if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; } });
 
             // Start persistence interval (save every 30s while playing)
             this.persistInterval = setInterval(() => {
