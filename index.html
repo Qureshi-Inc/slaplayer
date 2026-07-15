@@ -511,6 +511,40 @@
 
 
             <!-- Social -->
+            <div x-show="activeTab === 'activity'" x-cloak class="p-4 fade-in space-y-4">
+                <h3 class="text-base font-semibold flex items-center gap-2"><i class="fas fa-comment-dots text-accent-purple"></i> Activity</h3>
+
+                <div x-show="activityFeed.length === 0" class="text-center py-8 text-white/30 text-sm">No activity yet. Play songs and drop comments!</div>
+
+                <div class="space-y-2">
+                    <template x-for="(item, i) in activityFeed" :key="'af-' + i">
+                        <div class="glass rounded-xl p-3 cursor-pointer transition-all hover:bg-white/5" @click="openActivityTrack(item)">
+                            <div class="flex items-start gap-3">
+                                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-accent-purple/50 to-accent-pink/50 flex items-center justify-center font-bold text-xs flex-shrink-0" x-text="item.username.charAt(0).toUpperCase()"></div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs font-medium text-accent-purple" x-text="item.username"></span>
+                                        <span class="text-[10px] text-white/30" x-text="timeAgo(item.created_at || item.timestamp)"></span>
+                                    </div>
+                                    <p class="text-sm mt-0.5" :class="item.is_reaction ? 'text-2xl' : 'text-white/80'" x-text="item.text"></p>
+                                    <div class="flex items-center gap-2 mt-1.5">
+                                        <div class="w-6 h-6 rounded bg-dark-600 overflow-hidden flex-shrink-0">
+                                            <img x-show="getTrackArt(item.track_id)" :src="getTrackArt(item.track_id)" class="w-full h-full object-cover">
+                                        </div>
+                                        <div class="min-w-0">
+                                            <p class="text-[11px] text-white/50 truncate" x-text="item.title + ' — ' + item.artist"></p>
+                                        </div>
+                                        <button @click.stop="playTrackById(item.track_id)" class="ml-auto text-white/30 hover:text-accent-purple"><i class="fas fa-play text-[10px]"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <button @click="loadActivityFeed()" class="w-full py-2 rounded-lg glass text-xs text-white/40 hover:text-white">Refresh</button>
+            </div>
+
             <div x-show="activeTab === 'social'" x-cloak class="p-4 fade-in space-y-5">
 
                 <!-- The Squad -->
@@ -739,6 +773,9 @@
         <button @click="activeTab = 'library'" :class="activeTab === 'library' ? 'text-accent-purple' : 'text-white/40'" class="flex-1 py-3 flex flex-col items-center gap-0.5 transition-colors">
             <i class="fas fa-music text-sm"></i><span class="text-[10px]">Library</span>
         </button>
+        <button @click="activeTab = 'activity'" :class="activeTab === 'activity' ? 'text-accent-purple' : 'text-white/40'" class="flex-1 py-3 flex flex-col items-center gap-0.5 transition-colors">
+            <i class="fas fa-comment-dots text-sm"></i><span class="text-[10px]">Activity</span>
+        </button>
         <button @click="activeTab = 'social'" :class="activeTab === 'social' ? 'text-accent-purple' : 'text-white/40'" class="flex-1 py-3 flex flex-col items-center gap-0.5 transition-colors">
             <i class="fas fa-users text-sm"></i><span class="text-[10px]">Social</span>
         </button>
@@ -919,6 +956,7 @@ function app() {
         notifications: [], selectedUser: null,
         nowListening: [], aiDigest: { digest: '', highlights: [], vibe_shift: '' },
         tasteDNA: {}, tasteDNALoading: false, achievements: [], headToHead: {},
+        activityFeed: [],
         vibeText: '', vibeSubtext: '',
         slaptasticTracks: [],
 
@@ -1004,6 +1042,7 @@ function app() {
             this.generateVibe();
             this.generateNotifications();
             this.loadSocialData();
+            this.loadActivityFeed();
         },
 
         async loadSlaptasticData() {
@@ -1122,6 +1161,41 @@ function app() {
                 this.aiDigest = { digest: digest.digest || '', highlights: digest.highlights || [], vibe_shift: digest.vibe_shift || '' };
                 this.achievements = (achieve.achievements || []).slice(0, 9);
             } catch (e) {}
+        },
+
+        async loadActivityFeed() {
+            const API = 'https://slap.qureshi.io/api/v1/listening';
+            try {
+                const res = await fetch(`${API}/comments?limit=50`);
+                if (res.ok) {
+                    const data = await res.json();
+                    this.activityFeed = data.comments || [];
+                }
+            } catch (e) {}
+        },
+
+        openActivityTrack(item) {
+            const track = this.library.find(t => t.id === item.track_id);
+            if (track) { this.currentTrack = track; this.showFullPlayer = true; }
+        },
+
+        playTrackById(trackId) {
+            const track = this.library.find(t => t.id === trackId);
+            if (track) this.playTrack(track);
+        },
+
+        getTrackArt(trackId) {
+            const track = this.library.find(t => t.id === trackId);
+            return track ? track.albumArt : '';
+        },
+
+        timeAgo(isoStr) {
+            if (!isoStr) return '';
+            const diff = (Date.now() - new Date(isoStr).getTime()) / 1000;
+            if (diff < 60) return 'just now';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            return Math.floor(diff / 86400) + 'd ago';
         },
 
         getDashboardUsername() {
@@ -1709,10 +1783,12 @@ function app() {
         getCommentCount(track) { if (!track) return 0; return (this.comments[track.id] || []).length; },
         postComment() {
             if (!this.newComment.trim() || !this.currentTrack) return;
+            const text = this.newComment.trim();
             if (!this.comments[this.currentTrack.id]) this.comments[this.currentTrack.id] = [];
-            this.comments[this.currentTrack.id].push({ user: this.username || 'You', text: this.newComment.trim(), time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+            this.comments[this.currentTrack.id].push({ user: this.username || 'You', text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
             this.newComment = '';
             localStorage.setItem('slaplayer_comments', JSON.stringify(this.comments));
+            this.sendCommentToBackend(text, false);
         },
 
         postReaction(type) {
@@ -1722,6 +1798,25 @@ function app() {
             if (!this.comments[this.currentTrack.id]) this.comments[this.currentTrack.id] = [];
             this.comments[this.currentTrack.id].push({ user: this.username || 'You', text: emoji, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
             localStorage.setItem('slaplayer_comments', JSON.stringify(this.comments));
+            this.sendCommentToBackend(emoji, true);
+        },
+
+        async sendCommentToBackend(text, isReaction) {
+            if (!this.currentTrack) return;
+            try {
+                await fetch('https://slap.qureshi.io/api/v1/listening/comment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: this.username || 'anonymous',
+                        track_id: this.currentTrack.id,
+                        title: this.currentTrack.title || '',
+                        artist: this.currentTrack.artist || '',
+                        text,
+                        is_reaction: isReaction,
+                    }),
+                });
+            } catch (e) {}
         },
 
         // Metadata editing
