@@ -513,6 +513,66 @@
             <!-- Social -->
             <div x-show="activeTab === 'social'" x-cloak class="p-4 fade-in space-y-5">
 
+                <!-- The Squad -->
+                <div>
+                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-users text-accent-blue"></i> The Squad</h3>
+                    <div class="flex gap-3 overflow-x-auto py-2 px-1 scrollbar-thin">
+                        <template x-for="user in leaderboard" :key="user.username">
+                            <div class="flex-shrink-0 w-20 text-center cursor-pointer transition-all"
+                                @click="selectSquadUser(user.username)">
+                                <div class="w-14 h-14 mx-auto rounded-full flex items-center justify-center font-bold text-lg transition-all"
+                                    :class="selectedUser === user.username ? 'bg-gradient-to-br from-accent-purple to-accent-pink ring-2 ring-accent-purple ring-offset-2 ring-offset-dark-900' : 'bg-gradient-to-br from-accent-purple/50 to-accent-pink/50'"
+                                    x-text="user.username.charAt(0).toUpperCase()"></div>
+                                <p class="text-[11px] mt-1.5 truncate" :class="selectedUser === user.username ? 'text-white font-medium' : 'text-white/50'" x-text="user.username"></p>
+                                <p class="text-[9px] text-white/30" x-text="user.count + ' songs'"></p>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Selected User Profile -->
+                    <div x-show="selectedUser" class="mt-4 space-y-3">
+                        <div class="glass rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-12 h-12 rounded-full bg-gradient-to-br from-accent-purple to-accent-pink flex items-center justify-center font-bold text-xl" x-text="(selectedUser || '').charAt(0).toUpperCase()"></div>
+                                    <div>
+                                        <h4 class="font-semibold" x-text="selectedUser"></h4>
+                                        <p class="text-xs text-white/40" x-text="getUserTracks(selectedUser).length + ' tracks in library'"></p>
+                                    </div>
+                                </div>
+                                <button @click="playFromList(getUserTracks(selectedUser)[0], getUserTracks(selectedUser))" x-show="getUserTracks(selectedUser).length > 0"
+                                    class="px-3 py-1.5 rounded-full bg-accent-purple text-xs font-medium"><i class="fas fa-play text-[9px] mr-1"></i> Play all</button>
+                            </div>
+                            <div class="flex gap-2">
+                                <button @click="loadTasteDNA(selectedUser)" class="flex-1 py-2 rounded-lg glass text-xs text-white/60 hover:text-white"><i class="fas fa-dna text-pink-400 mr-1"></i> Taste DNA</button>
+                                <button @click="loadHeadToHead(selectedUser)" class="flex-1 py-2 rounded-lg glass text-xs text-white/60 hover:text-white"><i class="fas fa-chart-bar text-orange-400 mr-1"></i> Compare</button>
+                            </div>
+                        </div>
+                        <div class="space-y-1 max-h-64 overflow-y-auto scrollbar-thin">
+                            <template x-for="(track, i) in getUserTracks(selectedUser).slice(0, 20)" :key="track.id">
+                                <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer" @click="playFromList(track, getUserTracks(selectedUser))">
+                                    <span class="text-[10px] text-white/20 w-4 text-right" x-text="i + 1"></span>
+                                    <div class="w-9 h-9 rounded bg-dark-600 flex-shrink-0 overflow-hidden relative">
+                                        <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover" loading="lazy">
+                                        <template x-if="currentTrack && currentTrack.id === track.id && isPlaying">
+                                            <div class="absolute inset-0 bg-black/60 flex items-end justify-center gap-0.5 pb-1.5">
+                                                <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
+                                                <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
+                                                <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                        <p class="text-xs text-white/40 truncate" x-text="track.artist"></p>
+                                    </div>
+                                    <button @click.stop="addToQueue(track)" class="text-white/20 hover:text-accent-purple transition-colors"><i class="fas fa-plus text-xs"></i></button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Now Listening -->
                 <div x-show="nowListening.length > 0">
                     <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-headphones text-green-400"></i> Listening Now</h3>
@@ -619,65 +679,6 @@
                     </div>
                 </div>
 
-                <!-- The Squad -->
-                <div>
-                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-users text-accent-blue"></i> The Squad</h3>
-                    <div class="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-                        <template x-for="user in leaderboard" :key="user.username">
-                            <div class="flex-shrink-0 w-20 text-center cursor-pointer transition-all"
-                                @click="selectSquadUser(user.username)">
-                                <div class="w-14 h-14 mx-auto rounded-full flex items-center justify-center font-bold text-lg transition-all"
-                                    :class="selectedUser === user.username ? 'bg-gradient-to-br from-accent-purple to-accent-pink ring-2 ring-accent-purple ring-offset-2 ring-offset-dark-900' : 'bg-gradient-to-br from-accent-purple/50 to-accent-pink/50'"
-                                    x-text="user.username.charAt(0).toUpperCase()"></div>
-                                <p class="text-[11px] mt-1.5 truncate" :class="selectedUser === user.username ? 'text-white font-medium' : 'text-white/50'" x-text="user.username"></p>
-                                <p class="text-[9px] text-white/30" x-text="user.count + ' songs'"></p>
-                            </div>
-                        </template>
-                    </div>
-
-                    <!-- Selected User Profile -->
-                    <div x-show="selectedUser" class="mt-4 space-y-3">
-                        <div class="glass rounded-xl p-4">
-                            <div class="flex items-center justify-between mb-3">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-12 h-12 rounded-full bg-gradient-to-br from-accent-purple to-accent-pink flex items-center justify-center font-bold text-xl" x-text="(selectedUser || '').charAt(0).toUpperCase()"></div>
-                                    <div>
-                                        <h4 class="font-semibold" x-text="selectedUser"></h4>
-                                        <p class="text-xs text-white/40" x-text="getUserTracks(selectedUser).length + ' tracks in library'"></p>
-                                    </div>
-                                </div>
-                                <button @click="playFromList(getUserTracks(selectedUser)[0], getUserTracks(selectedUser))" x-show="getUserTracks(selectedUser).length > 0"
-                                    class="px-3 py-1.5 rounded-full bg-accent-purple text-xs font-medium"><i class="fas fa-play text-[9px] mr-1"></i> Play all</button>
-                            </div>
-                            <div class="flex gap-2">
-                                <button @click="loadTasteDNA(selectedUser)" class="flex-1 py-2 rounded-lg glass text-xs text-white/60 hover:text-white"><i class="fas fa-dna text-pink-400 mr-1"></i> Taste DNA</button>
-                                <button @click="loadHeadToHead(selectedUser)" class="flex-1 py-2 rounded-lg glass text-xs text-white/60 hover:text-white"><i class="fas fa-chart-bar text-orange-400 mr-1"></i> Compare</button>
-                            </div>
-                        </div>
-                        <div class="space-y-1 max-h-64 overflow-y-auto scrollbar-thin">
-                            <template x-for="(track, i) in getUserTracks(selectedUser).slice(0, 20)" :key="track.id">
-                                <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer" @click="playFromList(track, getUserTracks(selectedUser))">
-                                    <span class="text-[10px] text-white/20 w-4 text-right" x-text="i + 1"></span>
-                                    <div class="w-9 h-9 rounded bg-dark-600 flex-shrink-0 overflow-hidden relative">
-                                        <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover" loading="lazy">
-                                        <template x-if="currentTrack && currentTrack.id === track.id && isPlaying">
-                                            <div class="absolute inset-0 bg-black/60 flex items-end justify-center gap-0.5 pb-1.5">
-                                                <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
-                                                <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
-                                                <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
-                                            </div>
-                                        </template>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <p class="text-sm font-medium truncate" x-text="track.title"></p>
-                                        <p class="text-xs text-white/40 truncate" x-text="track.artist"></p>
-                                    </div>
-                                    <button @click.stop="addToQueue(track)" class="text-white/20 hover:text-accent-purple transition-colors"><i class="fas fa-plus text-xs"></i></button>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
 
