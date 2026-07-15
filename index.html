@@ -1187,6 +1187,8 @@ function app() {
             this.generateNotifications();
             this.loadSocialData();
             this.loadActivityFeed();
+            this.requestNotificationPermission();
+            this.startActivityPolling();
         },
 
         async loadSlaptasticData() {
@@ -1328,6 +1330,27 @@ function app() {
             } catch (e) {}
         },
 
+        startActivityPolling() {
+            setInterval(async () => {
+                const prevCount = this.activityFeed.length;
+                await this.loadActivityFeed();
+                // Check for new items that are about your tracks
+                if (this.activityFeed.length > prevCount) {
+                    const newItems = this.activityFeed.slice(0, this.activityFeed.length - prevCount);
+                    const dashMe = this.getDashboardUsername();
+                    const myTracks = this.library.filter(t => t.username === dashMe);
+                    newItems.forEach(c => {
+                        if (c.username === this.username) return;
+                        const isMyTrack = myTracks.some(t => t.id === c.track_id);
+                        const isMention = c.text && c.text.includes('@' + this.username);
+                        if (isMyTrack || isMention) {
+                            this.sendPushNotification('SlapPlayer', `${c.username}: ${c.text} on "${c.title}"`);
+                        }
+                    });
+                }
+            }, 30000); // Check every 30 seconds
+        },
+
         async loadActivityFeed() {
             const API = 'https://slap.qureshi.io/api/v1/listening';
             try {
@@ -1439,19 +1462,50 @@ function app() {
         async checkMentions() {
             const me = this.username;
             if (!me) return;
-            const mentions = this.activityFeed.filter(c => c.text && c.text.includes('@' + me));
-            mentions.forEach(m => {
-                const exists = this.notifications.some(n => n.commentId === String(m.id));
-                if (!exists) {
+            const dashMe = this.getDashboardUsername();
+
+            this.activityFeed.forEach(c => {
+                const exists = this.notifications.some(n => n.commentId === String(c.id));
+                if (exists || c.username === me) return;
+
+                // Someone @mentioned you
+                if (c.text && c.text.includes('@' + me)) {
                     this.notifications.unshift({
-                        text: `${m.username} mentioned you on "${m.title}"`,
-                        time: this.timeAgo(m.created_at),
+                        text: `${c.username} mentioned you on "${c.title}"`,
+                        time: this.timeAgo(c.created_at),
                         read: false,
-                        commentId: String(m.id),
-                        trackId: m.track_id,
+                        commentId: String(c.id),
+                        trackId: c.track_id,
+                    });
+                    return;
+                }
+
+                // Someone commented/reacted on YOUR song
+                const myTracks = this.library.filter(t => t.username === dashMe);
+                const isMyTrack = myTracks.some(t => t.id === c.track_id);
+                if (isMyTrack) {
+                    const verb = c.is_reaction ? 'reacted to' : 'commented on';
+                    this.notifications.unshift({
+                        text: `${c.username} ${verb} your track "${c.title}"`,
+                        time: this.timeAgo(c.created_at),
+                        read: false,
+                        commentId: String(c.id),
+                        trackId: c.track_id,
                     });
                 }
             });
+        },
+
+        async requestNotificationPermission() {
+            if ('Notification' in window && Notification.permission === 'default') {
+                await Notification.requestPermission();
+            }
+        },
+
+        sendPushNotification(title, body) {
+            if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+                new Notification(title, { body, icon: '/icon-192.png', badge: '/icon-192.png' });
+            }
         },
 
         markAllRead() { this.notifications.forEach(n => n.read = true); },
