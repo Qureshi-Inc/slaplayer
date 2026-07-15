@@ -671,6 +671,75 @@
                     </div>
                 </div>
 
+                <!-- Library Stats -->
+                <div x-show="socialStats.total_songs">
+                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-chart-pie text-accent-blue"></i> Library Stats</h3>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="glass rounded-xl p-3 text-center"><p class="text-xl font-bold text-accent-purple" x-text="socialStats.total_songs || 0"></p><p class="text-[10px] text-white/40">songs</p></div>
+                        <div class="glass rounded-xl p-3 text-center"><p class="text-xl font-bold text-accent-blue" x-text="socialStats.total_artists || 0"></p><p class="text-[10px] text-white/40">artists</p></div>
+                        <div class="glass rounded-xl p-3 text-center"><p class="text-xl font-bold text-green-400" x-text="socialStats.total_contributors || 0"></p><p class="text-[10px] text-white/40">members</p></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mt-2">
+                        <div class="glass rounded-lg p-2 flex items-center gap-2"><i class="fas fa-star text-yellow-400 text-xs"></i><span class="text-xs text-white/60" x-text="'Top: ' + (socialStats.top_artist || '—')"></span></div>
+                        <div class="glass rounded-lg p-2 flex items-center gap-2"><i class="fas fa-clock text-accent-purple text-xs"></i><span class="text-xs text-white/60" x-text="'Peak: ' + (socialStats.peak_hour != null ? socialStats.peak_hour + ':00' : '—')"></span></div>
+                    </div>
+                </div>
+
+                <!-- Streaks -->
+                <div x-show="socialStreaks.length > 0">
+                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-fire text-orange-400"></i> Streaks</h3>
+                    <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                        <template x-for="s in socialStreaks" :key="s.username">
+                            <div class="flex-shrink-0 glass rounded-xl p-3 w-32 text-center">
+                                <div class="w-8 h-8 mx-auto rounded-full flex items-center justify-center font-bold text-sm" :style="'background:' + s.color + '33; color:' + s.color" x-text="s.username.charAt(0).toUpperCase()"></div>
+                                <p class="text-xs font-medium mt-1.5 truncate" x-text="s.username"></p>
+                                <div class="flex items-center justify-center gap-1 mt-1">
+                                    <span class="text-lg font-bold" :class="s.is_active ? 'text-orange-400' : 'text-white/40'" x-text="s.current_streak"></span>
+                                    <i class="fas fa-fire text-[10px]" :class="s.is_active ? 'text-orange-400' : 'text-white/20'"></i>
+                                </div>
+                                <p class="text-[9px] text-white/30" x-text="'Best: ' + s.longest_streak + ' days'"></p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Personalities -->
+                <div x-show="socialPersonalities.length > 0">
+                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-masks-theater text-pink-400"></i> Music Personalities</h3>
+                    <div class="space-y-2">
+                        <template x-for="p in socialPersonalities" :key="p.username">
+                            <div class="glass rounded-xl p-3 flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold" :style="'background:' + p.color + '33; color:' + p.color" x-text="p.username.charAt(0).toUpperCase()"></div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium" x-text="p.username"></span>
+                                        <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 text-white/40" x-text="p.song_count + ' songs'"></span>
+                                    </div>
+                                    <p class="text-xs font-medium text-accent-purple" x-text="p.personality"></p>
+                                    <p class="text-[10px] text-white/40" x-text="p.description"></p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Hall of Fame -->
+                <div x-show="hallOfFame.length > 0">
+                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-crown text-yellow-400"></i> Hall of Fame</h3>
+                    <div class="space-y-2">
+                        <template x-for="h in hallOfFame" :key="h.title">
+                            <div class="glass rounded-xl p-3 flex items-center gap-3">
+                                <span class="text-2xl" x-text="h.emoji"></span>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-xs font-medium" x-text="h.title"></p>
+                                    <p class="text-[10px] text-white/40" x-text="h.description"></p>
+                                    <p class="text-xs text-accent-purple mt-0.5" x-text="h.value"></p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
                 <!-- Achievements -->
                 <div x-show="achievements.length > 0">
                     <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-trophy text-yellow-400"></i> Achievements</h3>
@@ -864,7 +933,11 @@
                 <div class="text-center">
                     <h2 class="text-xl font-bold truncate" x-text="currentTrack?.title || 'No track'"></h2>
                     <p class="text-white/60 mt-1" x-text="currentTrack?.artist"></p>
-                    <p x-show="currentTrack?.username" class="text-xs text-accent-purple mt-1">added by <span x-text="currentTrack?.username"></span></p>
+                    <div class="flex items-center justify-center gap-3 mt-1">
+                        <p x-show="currentTrack?.username" class="text-xs text-accent-purple">added by <span x-text="currentTrack?.username"></span></p>
+                        <span x-show="currentTrack?.username && trackPlayCount > 0" class="text-white/20">·</span>
+                        <p x-show="trackPlayCount > 0" class="text-xs text-white/40"><i class="fas fa-play text-[8px] mr-0.5"></i><span x-text="trackPlayCount + ' plays'"></span></p>
+                    </div>
                 </div>
                 <!-- Seekbar -->
                 <div class="mt-4 flex items-center gap-3">
@@ -1013,6 +1086,7 @@ function app() {
         notifications: [], selectedUser: null,
         nowListening: [], aiDigest: { digest: '', highlights: [], vibe_shift: '' },
         tasteDNA: {}, tasteDNALoading: false, achievements: [], headToHead: {},
+        socialStats: {}, socialStreaks: [], socialPersonalities: [], hallOfFame: [], trackPlayCount: 0,
         activityFeed: [], showActivityDetail: false, activityDetailTrack: null, mentionSuggestions: [],
         vibeText: '', vibeSubtext: '',
         slaptasticTracks: [],
@@ -1209,14 +1283,35 @@ function app() {
         async loadSocialData() {
             const API = 'https://slap.qureshi.io/api/v1';
             try {
-                const [now, digest, achieve] = await Promise.all([
+                const [now, digest, achieve, stats, streaks, personalities, hof] = await Promise.all([
                     fetch(`${API}/listening/now`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
                     fetch(`${API}/dashboard/ai/digest`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
                     fetch(`${API}/dashboard/achievements`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+                    fetch(`${API}/dashboard/stats`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+                    fetch(`${API}/dashboard/streaks`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+                    fetch(`${API}/dashboard/personalities`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+                    fetch(`${API}/dashboard/hall-of-fame`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
                 ]);
                 this.nowListening = now.listeners || now.entries || [];
                 this.aiDigest = { digest: digest.digest || '', highlights: digest.highlights || [], vibe_shift: digest.vibe_shift || '' };
                 this.achievements = (achieve.achievements || []).slice(0, 9);
+                this.socialStats = stats || {};
+                this.socialStreaks = (streaks.entries || []).slice(0, 7);
+                this.socialPersonalities = (personalities.cards || []).slice(0, 7);
+                this.hallOfFame = hof.entries || [];
+            } catch (e) {}
+        },
+
+        async fetchTrackPlayCount() {
+            this.trackPlayCount = 0;
+            if (!this.currentTrack) return;
+            try {
+                const res = await fetch(`https://slap.qureshi.io/api/v1/listening/stats?period=all`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const match = (data.most_played || []).find(t => t.track_id === this.currentTrack.id);
+                    if (match) this.trackPlayCount = match.play_count;
+                }
             } catch (e) {}
         },
 
@@ -1387,6 +1482,7 @@ function app() {
 
             // Update Media Session metadata
             this.updateMediaSession();
+            this.fetchTrackPlayCount();
 
             // Start Now Listening keepalive
             this.startNowListeningKeepAlive();
