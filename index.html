@@ -1143,13 +1143,19 @@ function app() {
             } catch (e) {}
         },
 
+        getDashboardUsername() {
+            const jellyfinToDashboard = { moiz: 'moiz', mutasif: 'themoosecompany', noor: 'nooramin40', shahraiz: 'shahraiz', Samad: 'asamad89', brendan: 'deception' };
+            return jellyfinToDashboard[this.username] || this.username || 'moiz';
+        },
+
         async loadTasteDNA(otherUser) {
             if (this.tasteDNALoading) return;
             if (this.tasteDNA.user2 === otherUser) { this.tasteDNA = {}; return; }
             this.tasteDNALoading = true;
             this.tasteDNA = {};
             const API = 'https://slap.qureshi.io/api/v1/dashboard';
-            const me = this.username || 'moiz';
+            const me = this.getDashboardUsername();
+            if (me === otherUser) { this.tasteDNALoading = false; return; }
             try {
                 const res = await fetch(`${API}/taste-dna/${me}/${otherUser}`);
                 if (res.ok) this.tasteDNA = await res.json();
@@ -1163,7 +1169,8 @@ function app() {
 
         async loadHeadToHead(otherUser) {
             const API = 'https://slap.qureshi.io/api/v1/dashboard';
-            const me = this.username || 'moiz';
+            const me = this.getDashboardUsername();
+            if (me === otherUser) return;
             try {
                 const res = await fetch(`${API}/head-to-head/${me}/${otherUser}`);
                 if (res.ok) this.headToHead = await res.json();
