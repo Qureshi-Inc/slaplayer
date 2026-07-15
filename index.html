@@ -747,11 +747,15 @@
     <!-- Full-Screen Player -->
     <div x-show="showFullPlayer" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="translate-y-full" x-transition:enter-end="translate-y-0"
         x-transition:leave="transition ease-in duration-200" x-transition:leave-start="translate-y-0" x-transition:leave-end="translate-y-full"
-        class="fixed inset-0 z-[100] bg-dark-900 flex flex-col overflow-hidden">
+        class="fixed inset-0 z-[100] bg-dark-900 flex flex-col overflow-hidden"
+        @touchstart="playerSwipeY = $event.touches[0].clientY; playerSwipeStarted = true"
+        @touchmove="if (playerSwipeStarted && $event.touches[0].clientY - playerSwipeY > 80) { showFullPlayer = false; playerSwipeStarted = false; }"
+        @touchend="playerSwipeStarted = false">
         <div class="absolute inset-0 opacity-20" :style="currentTrack?.albumArt ? 'background:url('+currentTrack.albumArt+') center/cover no-repeat; filter:blur(80px)' : ''"></div>
         <div class="relative flex flex-col h-full">
             <!-- Top bar -->
             <div class="flex items-center justify-between px-6 pt-4 pb-2 flex-shrink-0">
+                <div class="w-10 h-1 rounded-full bg-white/20 absolute top-2 left-1/2 -translate-x-1/2"></div>
                 <button @click="showFullPlayer = false" class="p-2 text-white/60 hover:text-white transition-colors"><i class="fas fa-chevron-down text-lg"></i></button>
                 <span class="text-xs text-white/40 uppercase tracking-wider">Now Playing</span>
                 <button @click="openEditModal(currentTrack)" class="p-2 text-white/60 hover:text-white transition-colors">
@@ -898,7 +902,7 @@ function app() {
         jellyfinUrl: '', jellyfinToken: '', userId: '', username: '',
 
         activeTab: 'discovery', showQueue: false, showNotifications: false,
-        showFullPlayer: false, showComments: false, showEditModal: false,
+        showFullPlayer: false, showComments: false, showEditModal: false, playerSwipeY: 0, playerSwipeStarted: false,
         loading: true, toastMessage: '',
         librarySubTab: 'songs', selectedAlbum: null, selectedArtist: null, selectedGenre: null,
 
