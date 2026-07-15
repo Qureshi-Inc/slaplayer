@@ -129,8 +129,8 @@
                         <i class="fas fa-bolt text-yellow-400"></i> Hot Right Now
                     </h3>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        <template x-for="(track, i) in recentTracks.slice(0, 6)" :key="track.id || i">
-                            <div class="glass glass-hover rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all" @click="playFromList(track, recentTracks)">
+                        <template x-for="(track, i) in (hotTracks.length ? hotTracks : recentTracks.slice(0, 6))" :key="track.id || i">
+                            <div class="glass glass-hover rounded-xl p-3 flex items-center gap-3 cursor-pointer transition-all" @click="playFromList(track, hotTracks.length ? hotTracks : recentTracks)">
                                 <div class="w-11 h-11 rounded-lg bg-dark-600 flex-shrink-0 overflow-hidden relative">
                                     <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover" loading="lazy">
                                     <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center"><i class="fas fa-music text-white/20"></i></div>
@@ -146,7 +146,7 @@
                                     <p class="text-sm font-medium truncate" x-text="track.title"></p>
                                     <p class="text-xs text-white/50 truncate" x-text="track.artist"></p>
                                 </div>
-                                <span x-show="track.username" class="text-[10px] px-2 py-0.5 rounded-full bg-accent-purple/20 text-accent-purple" x-text="track.username"></span>
+                                <span x-show="track.playCount" class="text-[10px] px-2 py-0.5 rounded-full bg-yellow-400/20 text-yellow-400" x-text="track.playCount + '&#x25B6;'"></span>
                             </div>
                         </template>
                     </div>
@@ -799,7 +799,7 @@ function app() {
         volume: 0.8, previousVolume: 0.8, shuffle: false, repeat: 'off',
         howl: null, progressInterval: null, playStartTime: 0,
 
-        library: [], filteredLibrary: [], recentTracks: [],
+        library: [], filteredLibrary: [], recentTracks: [], hotTracks: [], _hotRaw: [],
         leaderboard: [], topArtists: [], playlists: [],
         selectedPlaylist: null, playlistTracks: [],
         manualQueue: [], contextQueue: [],
@@ -862,6 +862,10 @@ function app() {
             this.comments = JSON.parse(localStorage.getItem('slaplayer_comments') || '{}');
             this.skipHistory = JSON.parse(localStorage.getItem('slaplayer_skips') || '{}');
             await Promise.all([this.loadSlaptasticData(), this.loadJellyfinLibrary(), this.loadPlaylists()]);
+            this.hotTracks = (this._hotRaw || []).map(t => {
+                const match = this.library.find(l => l.title === t.title && l.artist === t.artist) || {};
+                return { ...match, id: match.id || t.track_id, title: t.title, artist: t.artist, album: t.album, playCount: t.play_count, uniqueListeners: t.unique_listeners };
+            });
             this.loading = false;
             this.generateVibe();
             this.generateNotifications();
@@ -870,14 +874,16 @@ function app() {
         async loadSlaptasticData() {
             const API = 'https://slap.qureshi.io/api/v1/dashboard';
             try {
-                const [recent, lb, artists] = await Promise.all([
+                const [recent, lb, artists, hot] = await Promise.all([
                     fetch(`${API}/recent?limit=100`).then(r => r.json()).catch(() => ({})),
                     fetch(`${API}/leaderboard`).then(r => r.json()).catch(() => ({})),
                     fetch(`${API}/artists`).then(r => r.json()).catch(() => ({})),
+                    fetch(`${API}/hot`).then(r => r.json()).catch(() => ({})),
                 ]);
                 this.slaptasticTracks = recent.items || recent.tracks || [];
                 this.leaderboard = (lb.entries || lb.leaderboard || []).map(e => ({ username: e.username || e.user || e.name || '?', count: e.song_count || e.count || 0 }));
                 this.topArtists = (artists.artists || []).map(a => ({ name: a.name || a.artist || '?', count: a.count || 0 }));
+                this._hotRaw = hot.tracks || [];
             } catch (e) {}
         },
 
