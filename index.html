@@ -2,7 +2,7 @@
 <html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
     <title>SlapPlayer</title>
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0a0a0f">
@@ -25,7 +25,8 @@
     </script>
     <style>
         [x-cloak] { display: none !important; }
-        body { background: #0a0a0f; }
+        body { background: #0a0a0f; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+        @supports (padding-top: env(safe-area-inset-top)) { body { padding-top: env(safe-area-inset-top); } }
         .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.06); }
         .glass-strong { background: rgba(255,255,255,0.06); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); }
         .glass-hover:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); }
