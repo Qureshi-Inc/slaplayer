@@ -746,6 +746,53 @@
         </div>
     </div>
 
+    <!-- Song Detail Sheet (from Activity feed) -->
+    <div x-show="showActivityDetail" x-cloak x-transition
+        class="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm flex items-end justify-center"
+        @click.self="showActivityDetail = false">
+        <div class="w-full max-w-lg glass-strong rounded-t-2xl p-5 space-y-4 slide-up">
+            <div class="w-10 h-1 rounded-full bg-white/20 mx-auto -mt-1 mb-2"></div>
+            <div class="flex items-center gap-4" x-show="activityDetailTrack">
+                <div class="w-20 h-20 rounded-xl bg-dark-600 overflow-hidden flex-shrink-0">
+                    <img x-show="activityDetailTrack?.albumArt" :src="activityDetailTrack?.albumArt" class="w-full h-full object-cover">
+                    <div x-show="!activityDetailTrack?.albumArt" class="w-full h-full flex items-center justify-center"><i class="fas fa-music text-white/20 text-2xl"></i></div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h3 class="font-semibold text-lg truncate" x-text="activityDetailTrack?.title"></h3>
+                    <p class="text-white/50 text-sm truncate" x-text="activityDetailTrack?.artist"></p>
+                    <p x-show="activityDetailTrack?.album" class="text-white/30 text-xs truncate mt-0.5" x-text="activityDetailTrack?.album"></p>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <button @click="playTrack(activityDetailTrack); showActivityDetail = false"
+                    class="py-3 rounded-xl bg-accent-purple text-sm font-medium flex items-center justify-center gap-2">
+                    <i class="fas fa-play text-xs"></i> Play Now
+                </button>
+                <button @click="if(activityDetailTrack) { manualQueue.push(activityDetailTrack); showActivityDetail = false; showToast('Added to queue'); }"
+                    class="py-3 rounded-xl glass text-sm text-white/70 flex items-center justify-center gap-2">
+                    <i class="fas fa-plus text-xs"></i> Add to Queue
+                </button>
+            </div>
+            <div class="border-t border-white/5 pt-3">
+                <p class="text-[10px] text-white/30 uppercase tracking-wider mb-2">Comments on this track</p>
+                <div class="space-y-2 max-h-40 overflow-y-auto scrollbar-thin">
+                    <template x-for="(c, i) in activityFeed.filter(a => a.track_id === activityDetailTrack?.id)" :key="'dc-' + i">
+                        <div class="flex items-start gap-2">
+                            <div class="w-5 h-5 rounded-full bg-accent-purple/30 flex items-center justify-center text-[8px] font-bold flex-shrink-0" x-text="c.username.charAt(0).toUpperCase()"></div>
+                            <div>
+                                <span class="text-[10px] text-accent-purple font-medium" x-text="c.username"></span>
+                                <span class="text-[10px] text-white/30 ml-1" x-text="timeAgo(c.created_at)"></span>
+                                <p class="text-xs text-white/70" x-text="c.text"></p>
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="activityFeed.filter(a => a.track_id === activityDetailTrack?.id).length === 0" class="text-center text-white/20 text-xs py-2">No comments on this track yet</div>
+                </div>
+            </div>
+            <button @click="showActivityDetail = false" class="w-full py-2.5 rounded-xl glass text-sm text-white/40">Close</button>
+        </div>
+    </div>
+
     <!-- Mini Player Bar -->
     <div x-show="currentTrack" x-cloak @click="showFullPlayer = true"
         class="flex-shrink-0 cursor-pointer z-50">
@@ -956,7 +1003,7 @@ function app() {
         notifications: [], selectedUser: null,
         nowListening: [], aiDigest: { digest: '', highlights: [], vibe_shift: '' },
         tasteDNA: {}, tasteDNALoading: false, achievements: [], headToHead: {},
-        activityFeed: [],
+        activityFeed: [], showActivityDetail: false, activityDetailTrack: null,
         vibeText: '', vibeSubtext: '',
         slaptasticTracks: [],
 
@@ -1176,7 +1223,8 @@ function app() {
 
         openActivityTrack(item) {
             const track = this.library.find(t => t.id === item.track_id);
-            if (track) { this.currentTrack = track; this.showFullPlayer = true; }
+            this.activityDetailTrack = track || { id: item.track_id, title: item.title, artist: item.artist, albumArt: '' };
+            this.showActivityDetail = true;
         },
 
         playTrackById(trackId) {
