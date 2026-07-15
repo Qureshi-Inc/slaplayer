@@ -156,7 +156,7 @@
 
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
                     <div class="lg:col-span-2">
-                        <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-stream text-accent-blue"></i> Recent Activity</h3>
+                        <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-plus-circle text-green-400"></i> Recently Added</h3>
                         <div class="space-y-1">
                             <template x-for="(track, i) in recentTracks.slice(0, 15)" :key="'act-' + (track.id || i)">
                                 <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer transition-all border border-transparent"
@@ -923,8 +923,18 @@
                             <button @click="postReaction('thumbsdown'); showEmojiPicker = false" class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-lg">&#x1F44E;</button>
                         </div>
                     </div>
-                    <input x-model="newComment" @keyup.enter="postComment()" placeholder="Add a comment..."
-                        class="flex-1 min-w-0 px-3 py-2 bg-dark-700 rounded-full text-sm border border-white/5 focus:outline-none focus:border-accent-purple/50">
+                    <div class="flex-1 min-w-0 relative">
+                        <input x-model="newComment" @keyup.enter="postComment()" @input="checkMentionAutocomplete()" placeholder="Add a comment or @mention..."
+                            class="w-full px-3 py-2 bg-dark-700 rounded-full text-sm border border-white/5 focus:outline-none focus:border-accent-purple/50">
+                        <div x-show="mentionSuggestions.length > 0" class="absolute bottom-full left-0 right-0 mb-1 glass-strong rounded-lg overflow-hidden z-50">
+                            <template x-for="user in mentionSuggestions" :key="user">
+                                <button @click="insertMention(user)" class="w-full px-3 py-2 text-left text-xs hover:bg-white/10 flex items-center gap-2">
+                                    <div class="w-5 h-5 rounded-full bg-accent-purple/30 flex items-center justify-center text-[8px] font-bold" x-text="user.charAt(0).toUpperCase()"></div>
+                                    <span x-text="'@' + user"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
                     <button @click="postComment()" class="w-8 h-8 rounded-full bg-accent-purple flex items-center justify-center hover:bg-accent-purple/80 transition-colors flex-shrink-0">
                         <i class="fas fa-paper-plane text-xs"></i>
                     </button>
@@ -1003,7 +1013,7 @@ function app() {
         notifications: [], selectedUser: null,
         nowListening: [], aiDigest: { digest: '', highlights: [], vibe_shift: '' },
         tasteDNA: {}, tasteDNALoading: false, achievements: [], headToHead: {},
-        activityFeed: [], showActivityDetail: false, activityDetailTrack: null,
+        activityFeed: [], showActivityDetail: false, activityDetailTrack: null, mentionSuggestions: [],
         vibeText: '', vibeSubtext: '',
         slaptasticTracks: [],
 
@@ -1217,6 +1227,7 @@ function app() {
                 if (res.ok) {
                     const data = await res.json();
                     this.activityFeed = data.comments || [];
+                    this.checkMentions();
                 }
             } catch (e) {}
         },
@@ -1314,6 +1325,25 @@ function app() {
                     this.notifications.push({ text: `${t.username || 'Someone'} added "${t.title || t.name}"`, time: 'Recently', read: false });
                 });
             }
+            this.checkMentions();
+        },
+
+        async checkMentions() {
+            const me = this.username;
+            if (!me) return;
+            const mentions = this.activityFeed.filter(c => c.text && c.text.includes('@' + me));
+            mentions.forEach(m => {
+                const exists = this.notifications.some(n => n.commentId === String(m.id));
+                if (!exists) {
+                    this.notifications.unshift({
+                        text: `${m.username} mentioned you on "${m.title}"`,
+                        time: this.timeAgo(m.created_at),
+                        read: false,
+                        commentId: String(m.id),
+                        trackId: m.track_id,
+                    });
+                }
+            });
         },
 
         markAllRead() { this.notifications.forEach(n => n.read = true); },
@@ -1847,6 +1877,22 @@ function app() {
             this.comments[this.currentTrack.id].push({ user: this.username || 'You', text: emoji, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
             localStorage.setItem('slaplayer_comments', JSON.stringify(this.comments));
             this.sendCommentToBackend(emoji, true);
+        },
+
+        checkMentionAutocomplete() {
+            const text = this.newComment;
+            const atIdx = text.lastIndexOf('@');
+            if (atIdx === -1 || atIdx < text.length - 20) { this.mentionSuggestions = []; return; }
+            const query = text.slice(atIdx + 1).toLowerCase();
+            if (query.includes(' ') || query.length === 0) { this.mentionSuggestions = []; return; }
+            const allUsers = this.leaderboard.map(u => u.username);
+            this.mentionSuggestions = allUsers.filter(u => u.toLowerCase().startsWith(query) && u !== this.username);
+        },
+
+        insertMention(user) {
+            const atIdx = this.newComment.lastIndexOf('@');
+            this.newComment = this.newComment.slice(0, atIdx) + '@' + user + ' ';
+            this.mentionSuggestions = [];
         },
 
         async sendCommentToBackend(text, isReaction) {
