@@ -985,7 +985,7 @@ function app() {
             const API = 'https://slap.qureshi.io/api/v1/dashboard';
             try {
                 const [recent, lb, artists, hot] = await Promise.all([
-                    fetch(`${API}/recent?limit=100`).then(r => r.json()).catch(() => ({})),
+                    fetch(`${API}/recent?limit=200`).then(r => r.json()).catch(() => ({})),
                     fetch(`${API}/leaderboard`).then(r => r.json()).catch(() => ({})),
                     fetch(`${API}/artists`).then(r => r.json()).catch(() => ({})),
                     fetch(`${API}/hot`).then(r => r.json()).catch(() => ({})),
@@ -1053,10 +1053,17 @@ function app() {
             const match = this.slaptasticTracks.find(st => {
                 const stTitle = (st.title || st.name || '').toLowerCase().trim();
                 const stArtist = (st.artist || '').toLowerCase().trim();
-                // Exact match
+                if (!stTitle) return false;
+                // Exact title + artist match
                 if (stTitle === tTitle && stArtist === tArtist) return true;
-                // Title contains match (handles slight formatting differences)
-                if (stTitle && tTitle && (stTitle.includes(tTitle) || tTitle.includes(stTitle))) return true;
+                // Exact title match (artist may differ between YouTube uploader and real artist)
+                if (stTitle === tTitle) return true;
+                // Title contains (handles formatting differences)
+                if (tTitle.length > 4 && (stTitle.includes(tTitle) || tTitle.includes(stTitle))) return true;
+                // First significant words match (handles "Song Name - Official Video..." vs "Song Name")
+                const tWords = tTitle.split(/[\s\-–—(|]+/).filter(w => w.length > 2).slice(0, 3).join(' ');
+                const stWords = stTitle.split(/[\s\-–—(|]+/).filter(w => w.length > 2).slice(0, 3).join(' ');
+                if (tWords.length > 6 && stWords.length > 6 && (tWords.includes(stWords) || stWords.includes(tWords))) return true;
                 return false;
             });
             if (match) track.username = match.username || match.user || null;
