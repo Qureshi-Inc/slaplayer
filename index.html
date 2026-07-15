@@ -886,7 +886,7 @@ function app() {
 
         currentTrack: null, isPlaying: false, isBuffering: false, currentTime: 0, duration: 0,
         volume: 0.8, previousVolume: 0.8, shuffle: false, repeat: 'off',
-        audio: null, playStartTime: 0, playHistory: [], persistInterval: null,
+        audio: null, playStartTime: 0, playHistory: [], persistInterval: null, _sourceList: [], _sourceIndex: 0,
 
         library: [], filteredLibrary: [], recentTracks: [], hotTracks: [], _hotRaw: [],
         leaderboard: [], topArtists: [], playlists: [],
@@ -1146,6 +1146,8 @@ function app() {
         // Player
         playFromList(track, list) {
             const idx = list.findIndex(t => t.id === track.id);
+            this._sourceList = [...list];
+            this._sourceIndex = idx;
             this.contextQueue = list.slice(idx + 1);
             this.playTrack(track);
         },
@@ -1217,21 +1219,35 @@ function app() {
             if (this.manualQueue.length > 0) { this.playTrack(this.manualQueue.shift()); return; }
             if (this.contextQueue.length > 0) {
                 if (this.shuffle) { const idx = this.weightedRandom(this.contextQueue); this.playTrack(this.contextQueue.splice(idx, 1)[0]); }
-                else { this.playTrack(this.contextQueue.shift()); }
+                else {
+                    const next = this.contextQueue.shift();
+                    if (this._sourceList) this._sourceIndex = this._sourceList.findIndex(t => t.id === next.id);
+                    this.playTrack(next);
+                }
                 return;
             }
-            if (!this.currentTrack || !this.library.length) return;
-            const ci = this.library.findIndex(t => t.id === this.currentTrack.id);
-            this.playTrack(this.library[(ci + 1) % this.library.length]);
+            // Fallback: advance in source list or library
+            const list = this._sourceList && this._sourceList.length > 0 ? this._sourceList : this.library;
+            if (!this.currentTrack || !list.length) return;
+            const ci = list.findIndex(t => t.id === this.currentTrack.id);
+            const ni = (ci + 1) % list.length;
+            this._sourceIndex = ni;
+            this.contextQueue = list.slice(ni + 1);
+            this.playTrack(list[ni]);
         },
 
         playPrev() {
-            if (!this.currentTrack || !this.library.length) return;
+            if (!this.currentTrack) return;
             // If more than 5 seconds in, restart current track
             if (this.currentTime > 5) { this.seek(0); return; }
-            // Otherwise go to previous track
-            const ci = this.library.findIndex(t => t.id === this.currentTrack.id);
-            this.playTrack(this.library[ci <= 0 ? this.library.length - 1 : ci - 1]);
+            // Go to previous track in source list
+            const list = this._sourceList && this._sourceList.length > 0 ? this._sourceList : this.library;
+            if (!list.length) return;
+            const ci = list.findIndex(t => t.id === this.currentTrack.id);
+            const pi = ci <= 0 ? list.length - 1 : ci - 1;
+            this._sourceIndex = pi;
+            this.contextQueue = list.slice(pi + 1);
+            this.playTrack(list[pi]);
         },
 
         seek(val) {

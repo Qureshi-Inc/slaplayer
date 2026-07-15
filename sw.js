@@ -1,5 +1,5 @@
-const CACHE_NAME = 'slaplayer-v1';
-const PRECACHE = ['/', '/index.html', '/manifest.json'];
+const CACHE_NAME = 'slaplayer-v2';
+const PRECACHE = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(PRECACHE)));
