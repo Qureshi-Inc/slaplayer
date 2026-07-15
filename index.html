@@ -765,22 +765,20 @@
                 <!-- Seekbar -->
                 <div class="mt-4 flex items-center gap-3">
                     <span class="text-xs text-white/40 w-10 text-right" x-text="formatTime(currentTime)"></span>
-                    <input type="range" min="0" :max="duration || 100" :value="currentTime" @input="seek($event.target.value)" class="flex-1 cursor-pointer">
+                    <input type="range" min="0" :max="(duration && isFinite(duration)) ? duration : 100" :value="currentTime" @input="seek($event.target.value)" class="flex-1 cursor-pointer" step="1">
                     <span class="text-xs text-white/40 w-10" x-text="formatTime(duration)"></span>
                 </div>
                 <!-- Controls -->
-                <div class="flex items-center justify-center gap-6 mt-3 mb-4">
-                    <button @click="toggleShuffle()" :class="shuffle ? 'text-accent-purple' : 'text-white/30 hover:text-white/60'" class="p-2 transition-colors" title="Shuffle"><i class="fas fa-shuffle"></i></button>
-                    <button @click="seekBy(-10)" class="p-2 text-white/50 hover:text-white transition-colors" title="Seek -10s"><i class="fas fa-backward text-lg"></i></button>
-                    <button @click="playPrev()" class="p-2 text-white/70 hover:text-white transition-colors"><i class="fas fa-backward-step text-xl"></i></button>
-                    <button @click="togglePlay()" class="w-14 h-14 rounded-full bg-white flex items-center justify-center text-dark-900 hover:scale-105 transition-transform">
-                        <i :class="isPlaying ? 'fas fa-pause' : 'fas fa-play'" class="text-xl" :style="!isPlaying ? 'margin-left:3px' : ''"></i>
+                <div class="flex items-center justify-center gap-5 mt-3 mb-4">
+                    <button @click="toggleShuffle()" :class="shuffle ? 'text-accent-purple' : 'text-white/30'" class="w-10 h-10 flex items-center justify-center transition-colors"><i class="fas fa-shuffle text-sm"></i></button>
+                    <button @click="playPrev()" class="w-12 h-12 flex items-center justify-center text-white/70"><i class="fas fa-backward-step text-2xl"></i></button>
+                    <button @click="togglePlay()" class="w-16 h-16 rounded-full bg-white flex items-center justify-center text-dark-900 flex-shrink-0">
+                        <i :class="isPlaying ? 'fas fa-pause' : 'fas fa-play'" class="text-2xl" :style="!isPlaying ? 'margin-left:3px' : ''"></i>
                     </button>
-                    <button @click="playNext()" class="p-2 text-white/70 hover:text-white transition-colors"><i class="fas fa-forward-step text-xl"></i></button>
-                    <button @click="seekBy(10)" class="p-2 text-white/50 hover:text-white transition-colors" title="Seek +10s"><i class="fas fa-forward text-lg"></i></button>
-                    <button @click="toggleRepeat()" :class="repeat !== 'off' ? 'text-accent-purple' : 'text-white/30 hover:text-white/60'" class="p-2 transition-colors relative" title="Repeat">
-                        <i class="fas fa-repeat"></i>
-                        <span x-show="repeat === 'one'" class="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] font-bold text-accent-purple">1</span>
+                    <button @click="playNext()" class="w-12 h-12 flex items-center justify-center text-white/70"><i class="fas fa-forward-step text-2xl"></i></button>
+                    <button @click="toggleRepeat()" :class="repeat !== 'off' ? 'text-accent-purple' : 'text-white/30'" class="w-10 h-10 flex items-center justify-center transition-colors relative">
+                        <i class="fas fa-repeat text-sm"></i>
+                        <span x-show="repeat === 'one'" class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] font-bold text-accent-purple">1</span>
                     </button>
                 </div>
 
@@ -906,7 +904,7 @@ function app() {
         editForm: { id: '', title: '', artist: '', album: '', genre: '', year: '' },
         editSaving: false,
 
-        get progressPercent() { return this.duration > 0 ? (this.currentTime / this.duration) * 100 : 0; },
+        get progressPercent() { return (this.duration > 0 && isFinite(this.duration)) ? (this.currentTime / this.duration) * 100 : 0; },
         get unreadCount() { return this.notifications.filter(n => !n.read).length; },
 
         async init() {
@@ -1274,19 +1272,19 @@ function app() {
             if (!this.audio) return;
 
             this.audio.addEventListener('loadedmetadata', () => {
-                if (this.audio.duration && !isNaN(this.audio.duration)) {
+                if (this.audio.duration && isFinite(this.audio.duration)) {
                     this.duration = this.audio.duration;
                 }
             });
 
             this.audio.addEventListener('timeupdate', () => {
-                if (this.audio.currentTime && !isNaN(this.audio.currentTime)) {
+                if (this.audio.currentTime && isFinite(this.audio.currentTime)) {
                     this.currentTime = this.audio.currentTime;
                 }
             });
 
             this.audio.addEventListener('durationchange', () => {
-                if (this.audio.duration && !isNaN(this.audio.duration)) {
+                if (this.audio.duration && isFinite(this.audio.duration)) {
                     this.duration = this.audio.duration;
                 }
             });
@@ -1609,7 +1607,7 @@ function app() {
         },
 
         showToast(msg) { this.toast = msg; setTimeout(() => this.toast = '', 2000); },
-        formatTime(s) { if (!s || isNaN(s)) return '0:00'; return Math.floor(s/60) + ':' + String(Math.floor(s%60)).padStart(2, '0'); },
+        formatTime(s) { if (!s || !isFinite(s) || isNaN(s)) return '0:00'; return Math.floor(s/60) + ':' + String(Math.floor(s%60)).padStart(2, '0'); },
         formatDuration(s) { return s ? this.formatTime(s) : ''; },
     };
 }
