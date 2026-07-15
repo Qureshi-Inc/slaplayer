@@ -509,45 +509,128 @@
 
 
             <!-- Social -->
-            <div x-show="activeTab === 'social'" x-cloak class="p-4 fade-in">
-                <h3 class="text-base font-semibold mb-4 flex items-center gap-2"><i class="fas fa-users text-accent-blue"></i> The Squad</h3>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-                    <template x-for="user in leaderboard" :key="user.username">
-                        <div class="glass glass-hover rounded-xl p-4 cursor-pointer transition-all"
-                            :class="selectedUser === user.username ? 'border-accent-purple/50 bg-accent-purple/5' : ''"
-                            @click="selectedUser = selectedUser === user.username ? null : user.username">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-accent-purple to-accent-pink flex items-center justify-center font-bold" x-text="user.username.charAt(0).toUpperCase()"></div>
-                                <div>
-                                    <p class="font-medium text-sm" x-text="user.username"></p>
-                                    <p class="text-xs text-white/40" x-text="user.count + ' tracks added'"></p>
+            <div x-show="activeTab === 'social'" x-cloak class="p-4 fade-in space-y-5">
+
+                <!-- Now Listening -->
+                <div x-show="nowListening.length > 0">
+                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-headphones text-green-400"></i> Listening Now</h3>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="listener in nowListening" :key="listener.username">
+                            <div class="glass rounded-xl px-3 py-2 flex items-center gap-2">
+                                <div class="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center"><div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div></div>
+                                <div class="min-w-0">
+                                    <p class="text-xs font-medium" x-text="listener.username"></p>
+                                    <p class="text-[10px] text-white/40 truncate" x-text="listener.title + ' — ' + listener.artist"></p>
                                 </div>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-                <div x-show="selectedUser">
-                    <h4 class="font-semibold mb-3" x-text="selectedUser + '\\'s Tracks'"></h4>
-                    <div class="space-y-1">
-                        <template x-for="track in getUserTracks(selectedUser)" :key="track.id">
-                            <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer" @click="playFromList(track, getUserTracks(selectedUser))">
-                                <div class="w-9 h-9 rounded bg-dark-600 flex-shrink-0 overflow-hidden relative">
-                                    <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover" loading="lazy">
-                                    <template x-if="currentTrack && currentTrack.id === track.id && isPlaying">
-                                        <div class="absolute inset-0 bg-black/60 flex items-end justify-center gap-0.5 pb-1.5">
-                                            <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
-                                            <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
-                                            <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
-                                        </div>
-                                    </template>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium truncate" x-text="track.title"></p>
-                                    <p class="text-xs text-white/40 truncate" x-text="track.artist"></p>
-                                </div>
-                                <button @click.stop="addToQueue(track)" class="text-white/20 hover:text-accent-purple transition-colors"><i class="fas fa-plus text-xs"></i></button>
                             </div>
                         </template>
+                    </div>
+                </div>
+
+                <!-- AI Weekly Digest -->
+                <div x-show="aiDigest.digest">
+                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-newspaper text-accent-purple"></i> Weekly Digest</h3>
+                    <div class="glass rounded-xl p-4">
+                        <p class="text-sm text-white/80 leading-relaxed" x-text="aiDigest.digest"></p>
+                        <div x-show="aiDigest.highlights.length > 0" class="mt-3 space-y-1">
+                            <template x-for="h in aiDigest.highlights" :key="h">
+                                <p class="text-xs text-white/50 flex items-start gap-2"><i class="fas fa-star text-yellow-400 text-[8px] mt-1"></i><span x-text="h"></span></p>
+                            </template>
+                        </div>
+                        <p x-show="aiDigest.vibe_shift" class="text-xs text-accent-purple/80 mt-3 italic" x-text="aiDigest.vibe_shift"></p>
+                    </div>
+                </div>
+
+                <!-- Taste DNA -->
+                <div>
+                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-dna text-pink-400"></i> Taste DNA</h3>
+                    <div class="flex gap-2 mb-3 flex-wrap">
+                        <template x-for="user in leaderboard" :key="'dna-' + user.username">
+                            <button @click="loadTasteDNA(user.username)"
+                                class="px-3 py-1.5 rounded-full text-xs transition-all"
+                                :class="tasteDNA.user2 === user.username ? 'bg-accent-purple text-white' : 'glass hover:bg-white/10 text-white/60'"
+                                x-show="user.username !== username"
+                                x-text="user.username"></button>
+                        </template>
+                    </div>
+                    <div x-show="tasteDNA.analysis" class="glass rounded-xl p-4 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-medium" x-text="'You & ' + tasteDNA.user2"></span>
+                            <span class="text-lg font-bold text-accent-purple" x-text="tasteDNA.compatibility_score + '%'"></span>
+                        </div>
+                        <div class="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+                            <div class="h-full rounded-full progress-gradient transition-all" :style="'width:' + tasteDNA.compatibility_score + '%'"></div>
+                        </div>
+                        <p class="text-sm text-white/70" x-text="tasteDNA.analysis"></p>
+                        <div class="grid grid-cols-2 gap-3 text-xs">
+                            <div><span class="text-white/40 block mb-1">Your vibe</span><span class="text-accent-purple" x-text="tasteDNA.vibe_user1"></span></div>
+                            <div><span class="text-white/40 block mb-1">Their vibe</span><span class="text-pink-400" x-text="tasteDNA.vibe_user2"></span></div>
+                        </div>
+                        <div x-show="tasteDNA.shared_artists.length > 0" class="pt-2 border-t border-white/5">
+                            <span class="text-[10px] text-white/40 uppercase">Shared artists:</span>
+                            <p class="text-xs text-white/60 mt-1" x-text="tasteDNA.shared_artists.join(', ')"></p>
+                        </div>
+                    </div>
+                    <div x-show="tasteDNALoading" class="glass rounded-xl p-6 flex items-center justify-center">
+                        <i class="fas fa-spinner fa-spin text-accent-purple mr-2"></i><span class="text-sm text-white/50">Analyzing taste...</span>
+                    </div>
+                </div>
+
+                <!-- Achievements -->
+                <div x-show="achievements.length > 0">
+                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-trophy text-yellow-400"></i> Achievements</h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <template x-for="a in achievements" :key="a.id">
+                            <div class="glass rounded-xl p-3 text-center transition-all" :class="a.unlocked ? '' : 'opacity-30'">
+                                <span class="text-2xl block mb-1" x-text="a.emoji"></span>
+                                <p class="text-xs font-medium" x-text="a.name"></p>
+                                <p class="text-[10px] text-white/40 mt-0.5" x-text="a.unlocked ? a.unlocked_by.join(', ') : 'Locked'"></p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- The Squad -->
+                <div>
+                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-users text-accent-blue"></i> The Squad</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <template x-for="user in leaderboard" :key="user.username">
+                            <div class="glass glass-hover rounded-xl p-4 cursor-pointer transition-all"
+                                :class="selectedUser === user.username ? 'border-accent-purple/50 bg-accent-purple/5' : ''"
+                                @click="selectedUser = selectedUser === user.username ? null : user.username">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-accent-purple to-accent-pink flex items-center justify-center font-bold" x-text="user.username.charAt(0).toUpperCase()"></div>
+                                    <div>
+                                        <p class="font-medium text-sm" x-text="user.username"></p>
+                                        <p class="text-xs text-white/40" x-text="user.count + ' tracks added'"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    <div x-show="selectedUser" class="mt-4">
+                        <h4 class="font-semibold mb-3" x-text="selectedUser + '\\'s Tracks'"></h4>
+                        <div class="space-y-1">
+                            <template x-for="track in getUserTracks(selectedUser)" :key="track.id">
+                                <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer" @click="playFromList(track, getUserTracks(selectedUser))">
+                                    <div class="w-9 h-9 rounded bg-dark-600 flex-shrink-0 overflow-hidden relative">
+                                        <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover" loading="lazy">
+                                        <template x-if="currentTrack && currentTrack.id === track.id && isPlaying">
+                                            <div class="absolute inset-0 bg-black/60 flex items-end justify-center gap-0.5 pb-1.5">
+                                                <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
+                                                <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
+                                                <div class="w-0.5 bg-accent-purple rounded-full now-playing-bar"></div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                        <p class="text-xs text-white/40 truncate" x-text="track.artist"></p>
+                                    </div>
+                                    <button @click.stop="addToQueue(track)" class="text-white/20 hover:text-accent-purple transition-colors"><i class="fas fa-plus text-xs"></i></button>
+                                </div>
+                            </template>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -804,6 +887,8 @@ function app() {
         selectedPlaylist: null, playlistTracks: [],
         manualQueue: [], contextQueue: [],
         notifications: [], selectedUser: null,
+        nowListening: [], aiDigest: { digest: '', highlights: [], vibe_shift: '' },
+        tasteDNA: {}, tasteDNALoading: false, achievements: [],
         vibeText: '', vibeSubtext: '',
         slaptasticTracks: [],
 
@@ -869,6 +954,7 @@ function app() {
             this.loading = false;
             this.generateVibe();
             this.generateNotifications();
+            this.loadSocialData();
         },
 
         async loadSlaptasticData() {
@@ -953,16 +1039,73 @@ function app() {
             return track;
         },
 
-        generateVibe() {
-            const vibes = [
-                { text: 'Late Night Energy', sub: 'Adding bangers past midnight' },
-                { text: 'Discovery Mode', sub: 'Fresh tracks incoming' },
-                { text: 'Main Character Energy', sub: 'Everyone is the protagonist' },
-                { text: 'Genre Chaos', sub: 'Hip-hop to hyperpop in one playlist' },
-                { text: 'Taste Unlocked', sub: 'The algorithm could never' },
-            ];
-            const v = vibes[Math.floor(Math.random() * vibes.length)];
-            this.vibeText = v.text; this.vibeSubtext = v.sub;
+        async generateVibe() {
+            const API = 'https://slap.qureshi.io/api/v1/dashboard';
+            try {
+                const res = await fetch(`${API}/ai/vibe-check`);
+                if (res.ok) {
+                    const data = await res.json();
+                    this.vibeText = data.vibe || 'Vibing';
+                    this.vibeSubtext = data.description || '';
+                    return;
+                }
+            } catch (e) {}
+            this.vibeText = 'Discovery Mode';
+            this.vibeSubtext = 'Fresh tracks incoming';
+        },
+
+        async loadSocialData() {
+            const API = 'https://slap.qureshi.io/api/v1';
+            try {
+                const [now, digest, achieve] = await Promise.all([
+                    fetch(`${API}/listening/now`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+                    fetch(`${API}/dashboard/ai/digest`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+                    fetch(`${API}/dashboard/achievements`).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+                ]);
+                this.nowListening = now.listeners || now.entries || [];
+                this.aiDigest = { digest: digest.digest || '', highlights: digest.highlights || [], vibe_shift: digest.vibe_shift || '' };
+                this.achievements = (achieve.achievements || []).slice(0, 9);
+            } catch (e) {}
+        },
+
+        async loadTasteDNA(otherUser) {
+            if (this.tasteDNALoading) return;
+            if (this.tasteDNA.user2 === otherUser) { this.tasteDNA = {}; return; }
+            this.tasteDNALoading = true;
+            this.tasteDNA = {};
+            const API = 'https://slap.qureshi.io/api/v1/dashboard';
+            const me = this.username || 'moiz';
+            try {
+                const res = await fetch(`${API}/taste-dna/${me}/${otherUser}`);
+                if (res.ok) this.tasteDNA = await res.json();
+            } catch (e) {}
+            this.tasteDNALoading = false;
+        },
+
+        async reportPlayEvent(completed = false) {
+            if (!this.currentTrack || !this.username) return;
+            const elapsed = Math.round((Date.now() - this.playStartTime) / 1000);
+            if (elapsed < 5) return;
+            const API = 'https://slap.qureshi.io/api/v1/listening';
+            try {
+                await fetch(`${API}/play`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: this.username,
+                        track_id: this.currentTrack.id,
+                        title: this.currentTrack.title || '',
+                        artist: this.currentTrack.artist || '',
+                        album: this.currentTrack.album || null,
+                        duration_seconds: Math.round(this.duration || 0),
+                        listened_seconds: elapsed,
+                        completed: completed,
+                        hour_of_day: new Date().getHours(),
+                        skipped: false,
+                        thumbs: this.thumbs[this.currentTrack.id] || 0,
+                    }),
+                });
+            } catch (e) {}
         },
 
         generateNotifications() {
@@ -997,7 +1140,7 @@ function app() {
                 src: [track.streamUrl], html5: true, volume: this.volume,
                 onplay: () => { this.isPlaying = true; this.duration = this.howl.duration() || track.duration || 0; this.startProgress(); },
                 onpause: () => { this.isPlaying = false; },
-                onend: () => { this.isPlaying = false; this.currentTime = 0; this.autoNext(); },
+                onend: () => { this.isPlaying = false; this.currentTime = 0; this.reportPlayEvent(true); this.autoNext(); },
                 onloaderror: () => {}, onplayerror: () => {},
             });
             this.howl.play();
@@ -1061,6 +1204,7 @@ function app() {
         recordSkip() {
             if (!this.currentTrack) return;
             const elapsed = (Date.now() - this.playStartTime) / 1000;
+            if (elapsed >= 5) this.reportPlayEvent(false);
             if (elapsed < 15) {
                 this.skipHistory[this.currentTrack.id] = (this.skipHistory[this.currentTrack.id] || 0) + 1;
                 localStorage.setItem('slaplayer_skips', JSON.stringify(this.skipHistory));
