@@ -883,8 +883,10 @@
         </div>
     </div>
 
-    <!-- Toast -->
-    <div x-show="toast" x-cloak x-transition class="fixed top-16 left-1/2 -translate-x-1/2 z-[200] glass-strong px-4 py-2 rounded-full text-sm" x-text="toast"></div>
+    <!-- Toast Notifications -->
+    <div x-show="toastMessage" x-cloak x-transition
+        class="fixed top-16 left-1/2 -translate-x-1/2 z-[200] glass-strong px-4 py-2 rounded-full text-sm shadow-lg max-w-xs text-center"
+        x-text="toastMessage"></div>
 </div>
 
 <script>
@@ -897,12 +899,14 @@ function app() {
 
         activeTab: 'discovery', showQueue: false, showNotifications: false,
         showFullPlayer: false, showComments: false, showEditModal: false,
-        loading: true, toast: '',
+        loading: true, toastMessage: '',
         librarySubTab: 'songs', selectedAlbum: null, selectedArtist: null, selectedGenre: null,
 
         currentTrack: null, isPlaying: false, isBuffering: false, currentTime: 0, duration: 0,
         volume: 0.8, previousVolume: 0.8, shuffle: false, repeat: 'off',
         audio: null, playStartTime: 0, playHistory: [], persistInterval: null, _sourceList: [], _sourceIndex: 0,
+        retryCount: 0, maxRetries: 3, isOffline: false, hadPlaybackError: false,
+        nowListeningKeepAliveInterval: null,
 
         library: [], filteredLibrary: [], recentTracks: [], hotTracks: [], _hotRaw: [],
         leaderboard: [], topArtists: [], playlists: [],
@@ -929,6 +933,7 @@ function app() {
             this.setupAudioEvents();
             this.setupKeyboardShortcuts();
             this.setupMediaSession();
+            this.setupOnlineOfflineDetection();
 
             const session = localStorage.getItem('slaplayer_session');
             if (session) {
@@ -1150,9 +1155,10 @@ function app() {
         },
 
         async reportPlayEvent(completed = false) {
-            if (!this.currentTrack || !this.username) return;
+            if (!this.currentTrack || !this.username || this.hadPlaybackError) return;
             const elapsed = Math.round((Date.now() - this.playStartTime) / 1000);
-            if (elapsed < 5) return;
+            // Only count as play if listened > 30 seconds
+            if (elapsed < 30) return;
             const API = 'https://slap.qureshi.io/api/v1/listening';
             try {
                 await fetch(`${API}/play`, {
@@ -1205,6 +1211,8 @@ function app() {
             this.currentTime = 0;
             this.duration = track.duration || 0;
             this.playStartTime = Date.now();
+            this.retryCount = 0;
+            this.hadPlaybackError = false;
 
             // Add to history (keep last 50)
             this.playHistory.push({ id: track.id, timestamp: Date.now() });
@@ -1223,6 +1231,9 @@ function app() {
 
             // Update Media Session metadata
             this.updateMediaSession();
+
+            // Start Now Listening keepalive
+            this.startNowListeningKeepAlive();
 
             // Save state
             this.savePlaybackState();
@@ -1327,6 +1338,127 @@ function app() {
             this.savePlaybackState();
         },
 
+        async handleStreamError(e) {
+            const errorCode = this.audio?.error?.code;
+            const httpStatus = this.audio?.error?.message;
+
+            // Detect auth errors (401/403)
+            if (httpStatus && (httpStatus.includes('401') || httpStatus.includes('403'))) {
+                if (this.retryCount < this.maxRetries) {
+                    this.showToast('Re-authenticating...');
+                    await this.reAuthenticate();
+                    this.retryCurrentTrack();
+                } else {
+                    this.showToast('Auth failed, please re-login');
+                    this.skipToNext();
+                }
+            }
+            // Network errors
+            else if (errorCode === MediaError.MEDIA_ERR_NETWORK) {
+                if (this.retryCount < this.maxRetries) {
+                    this.retryCount++;
+                    this.showToast('Connection lost, retrying...');
+                    setTimeout(() => this.retryCurrentTrack(), 2000 * this.retryCount);
+                } else {
+                    this.showToast('Connection failed, skipping...');
+                    this.skipToNext();
+                }
+            }
+            // Missing track (404)
+            else if (errorCode === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+                this.showToast('Track unavailable, skipping...');
+                this.skipToNext();
+            }
+            // Other errors
+            else {
+                if (this.retryCount < this.maxRetries) {
+                    this.retryCount++;
+                    setTimeout(() => this.retryCurrentTrack(), 2000);
+                } else {
+                    this.showToast('Playback error, skipping...');
+                    this.skipToNext();
+                }
+            }
+        },
+
+        async reAuthenticate() {
+            if (!this.loginForm.password) return false;
+            try {
+                const url = this.jellyfinUrl.replace(/\/+$/, '');
+                const res = await fetch(`${url}/Users/AuthenticateByName`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Emby-Authorization': 'MediaBrowser Client="SlapPlayer", Device="Browser", DeviceId="slaplayer-web", Version="2.0.0"' },
+                    body: JSON.stringify({ Username: this.loginForm.username, Pw: this.loginForm.password }),
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    this.jellyfinToken = data.AccessToken;
+                    localStorage.setItem('slaplayer_session', JSON.stringify({ serverUrl: url, token: data.AccessToken, username: this.loginForm.username, userId: this.userId }));
+                    return true;
+                }
+            } catch (e) {
+                console.error('Re-auth failed:', e);
+            }
+            return false;
+        },
+
+        retryCurrentTrack() {
+            if (!this.currentTrack) return;
+            const streamUrl = `${this.jellyfinUrl}/Audio/${this.currentTrack.id}/universal?UserId=${this.userId}&api_key=${this.jellyfinToken}&AudioCodec=mp3&MaxStreamingBitrate=320000`;
+            const savedTime = this.currentTime;
+            this.audio.src = streamUrl;
+            this.audio.currentTime = savedTime;
+            this.audio.play().catch(err => {
+                console.error('Retry failed:', err);
+            });
+        },
+
+        skipToNext() {
+            this.hadPlaybackError = true;
+            this.playNext();
+        },
+
+        setupOnlineOfflineDetection() {
+            window.addEventListener('online', () => {
+                this.isOffline = false;
+                this.showToast('Back online');
+                // If we were playing something, retry
+                if (this.currentTrack && !this.isPlaying) {
+                    this.retryCurrentTrack();
+                }
+            });
+
+            window.addEventListener('offline', () => {
+                this.isOffline = true;
+                this.showToast('Offline — music paused');
+                if (this.audio) this.audio.pause();
+            });
+        },
+
+        startNowListeningKeepAlive() {
+            // Clear any existing interval
+            if (this.nowListeningKeepAliveInterval) {
+                clearInterval(this.nowListeningKeepAliveInterval);
+            }
+
+            // Send keepalive every 60 seconds while playing
+            this.nowListeningKeepAliveInterval = setInterval(() => {
+                if (this.isPlaying && this.currentTrack && this.username) {
+                    const API = 'https://slap.qureshi.io/api/v1/listening';
+                    fetch(`${API}/now`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username: this.username,
+                            track_id: this.currentTrack.id,
+                            title: this.currentTrack.title || '',
+                            artist: this.currentTrack.artist || '',
+                        }),
+                    }).catch(() => {});
+                }
+            }, 60000);
+        },
+
         setupAudioEvents() {
             if (!this.audio) return;
 
@@ -1371,7 +1503,9 @@ function app() {
             this.audio.addEventListener('ended', () => {
                 this.isPlaying = false;
                 this.currentTime = 0;
-                this.reportPlayEvent(true);
+                if (!this.hadPlaybackError) {
+                    this.reportPlayEvent(true);
+                }
                 this.autoNext();
             });
 
@@ -1379,7 +1513,16 @@ function app() {
                 console.error('Audio error:', e);
                 this.isPlaying = false;
                 this.isBuffering = false;
-                this.showToast('Playback error');
+                this.hadPlaybackError = true;
+                this.handleStreamError(e);
+            });
+
+            // Handle stalled streams (no data for 10 seconds)
+            this.audio.addEventListener('stalled', () => {
+                console.warn('Stream stalled, attempting retry...');
+                if (this.retryCount < this.maxRetries) {
+                    this.retryCurrentTrack();
+                }
             });
 
             // Start persistence interval (save every 30s while playing)
@@ -1520,13 +1663,25 @@ function app() {
 
         // Smart shuffle weights
         weightedRandom(tracks) {
-            const weights = tracks.map(t => {
+            const weights = tracks.map((t, idx) => {
                 let w = 1;
                 const thumb = this.thumbs[t.id];
                 if (thumb === 1) w = 3;
                 else if (thumb === -1) w = 0.25;
                 if (this.skipHistory[t.id] > 0) w *= 0.5;
                 if (!this.hasBeenPlayed(t)) w *= 1.5;
+
+                // Avoid back-to-back same artist
+                if (this.currentTrack && t.artist === this.currentTrack.artist && tracks.length > 3) {
+                    w *= 0.3;
+                }
+
+                // Boost recently added tracks (novelty bonus)
+                if (t.dateAdded) {
+                    const daysAgo = (Date.now() - new Date(t.dateAdded).getTime()) / (1000 * 60 * 60 * 24);
+                    if (daysAgo < 7) w *= 1.3;
+                }
+
                 return w;
             });
             const total = weights.reduce((a, b) => a + b, 0);
@@ -1665,7 +1820,10 @@ function app() {
             return this.library.filter(t => t.genre && t.genre.toLowerCase() === genre.name.toLowerCase());
         },
 
-        showToast(msg) { this.toast = msg; setTimeout(() => this.toast = '', 2000); },
+        showToast(msg, duration = 3000) {
+            this.toastMessage = msg;
+            setTimeout(() => this.toastMessage = '', duration);
+        },
         formatTime(s) { if (!s || !isFinite(s) || isNaN(s)) return '0:00'; return Math.floor(s/60) + ':' + String(Math.floor(s%60)).padStart(2, '0'); },
         formatDuration(s) { return s ? this.formatTime(s) : ''; },
     };
