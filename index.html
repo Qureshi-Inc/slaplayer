@@ -543,11 +543,45 @@
                                 <button @click="playFromList(getUserTracks(selectedUser)[0], getUserTracks(selectedUser))" x-show="getUserTracks(selectedUser).length > 0"
                                     class="px-3 py-1.5 rounded-full bg-accent-purple text-xs font-medium"><i class="fas fa-play text-[9px] mr-1"></i> Play all</button>
                             </div>
-                            <div class="flex gap-2">
+                            <div class="flex gap-2" x-show="getDashboardUsername() !== selectedUser">
                                 <button @click="loadTasteDNA(selectedUser)" class="flex-1 py-2 rounded-lg glass text-xs text-white/60 hover:text-white"><i class="fas fa-dna text-pink-400 mr-1"></i> Taste DNA</button>
                                 <button @click="loadHeadToHead(selectedUser)" class="flex-1 py-2 rounded-lg glass text-xs text-white/60 hover:text-white"><i class="fas fa-chart-bar text-orange-400 mr-1"></i> Compare</button>
                             </div>
                         </div>
+
+                        <!-- Inline Taste DNA result -->
+                        <div x-show="tasteDNA.analysis && tasteDNA.user2 === selectedUser" class="glass rounded-xl p-4 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-medium text-pink-400"><i class="fas fa-dna mr-1"></i> Taste DNA</span>
+                                <span class="text-lg font-bold text-accent-purple" x-text="(tasteDNA.compatibility_score || 0) + '%'"></span>
+                            </div>
+                            <div class="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+                                <div class="h-full rounded-full progress-gradient transition-all" :style="'width:' + (tasteDNA.compatibility_score || 0) + '%'"></div>
+                            </div>
+                            <p class="text-xs text-white/70" x-text="tasteDNA.analysis"></p>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div><span class="text-white/40 block">You</span><span class="text-accent-purple" x-text="tasteDNA.vibe_user1"></span></div>
+                                <div><span class="text-white/40 block">Them</span><span class="text-pink-400" x-text="tasteDNA.vibe_user2"></span></div>
+                            </div>
+                        </div>
+                        <div x-show="tasteDNALoading && selectedUser" class="glass rounded-xl p-4 flex items-center justify-center">
+                            <i class="fas fa-spinner fa-spin text-accent-purple mr-2"></i><span class="text-xs text-white/50">Analyzing taste...</span>
+                        </div>
+
+                        <!-- Inline Head-to-Head result -->
+                        <div x-show="headToHead.user2 === selectedUser" class="glass rounded-xl p-4 space-y-3">
+                            <p class="text-xs font-medium text-orange-400"><i class="fas fa-chart-bar mr-1"></i> Head to Head</p>
+                            <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                                <div class="glass rounded-lg p-2"><p class="text-lg font-bold text-accent-purple" x-text="headToHead.user1_songs || 0"></p><p class="text-white/40">you</p></div>
+                                <div class="glass rounded-lg p-2"><p class="text-lg font-bold text-white/60" x-text="(headToHead.shared_artists || []).length"></p><p class="text-white/40">shared</p></div>
+                                <div class="glass rounded-lg p-2"><p class="text-lg font-bold text-pink-400" x-text="headToHead.user2_songs || 0"></p><p class="text-white/40">them</p></div>
+                            </div>
+                            <div x-show="(headToHead.shared_artists || []).length > 0">
+                                <p class="text-[10px] text-white/40 uppercase mb-1">Artists you both love</p>
+                                <p class="text-xs text-white/60" x-text="(headToHead.shared_artists || []).join(', ')"></p>
+                            </div>
+                        </div>
+
                         <div class="space-y-1 max-h-64 overflow-y-auto scrollbar-thin">
                             <template x-for="(track, i) in getUserTracks(selectedUser).slice(0, 20)" :key="track.id">
                                 <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer" @click="playFromList(track, getUserTracks(selectedUser))">
@@ -603,41 +637,6 @@
                     </div>
                 </div>
 
-                <!-- Taste DNA -->
-                <div>
-                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-dna text-pink-400"></i> Taste DNA</h3>
-                    <div class="flex gap-2 mb-3 flex-wrap">
-                        <template x-for="user in leaderboard" :key="'dna-' + user.username">
-                            <button @click="loadTasteDNA(user.username)"
-                                class="px-3 py-1.5 rounded-full text-xs transition-all"
-                                :class="tasteDNA.user2 === user.username ? 'bg-accent-purple text-white' : 'glass hover:bg-white/10 text-white/60'"
-                                x-show="user.username !== username"
-                                x-text="user.username"></button>
-                        </template>
-                    </div>
-                    <div x-show="tasteDNA.analysis" class="glass rounded-xl p-4 space-y-3">
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm font-medium" x-text="'You & ' + tasteDNA.user2"></span>
-                            <span class="text-lg font-bold text-accent-purple" x-text="tasteDNA.compatibility_score + '%'"></span>
-                        </div>
-                        <div class="w-full h-2 rounded-full bg-white/10 overflow-hidden">
-                            <div class="h-full rounded-full progress-gradient transition-all" :style="'width:' + tasteDNA.compatibility_score + '%'"></div>
-                        </div>
-                        <p class="text-sm text-white/70" x-text="tasteDNA.analysis"></p>
-                        <div class="grid grid-cols-2 gap-3 text-xs">
-                            <div><span class="text-white/40 block mb-1">Your vibe</span><span class="text-accent-purple" x-text="tasteDNA.vibe_user1"></span></div>
-                            <div><span class="text-white/40 block mb-1">Their vibe</span><span class="text-pink-400" x-text="tasteDNA.vibe_user2"></span></div>
-                        </div>
-                        <div x-show="tasteDNA.shared_artists.length > 0" class="pt-2 border-t border-white/5">
-                            <span class="text-[10px] text-white/40 uppercase">Shared artists:</span>
-                            <p class="text-xs text-white/60 mt-1" x-text="tasteDNA.shared_artists.join(', ')"></p>
-                        </div>
-                    </div>
-                    <div x-show="tasteDNALoading" class="glass rounded-xl p-6 flex items-center justify-center">
-                        <i class="fas fa-spinner fa-spin text-accent-purple mr-2"></i><span class="text-sm text-white/50">Analyzing taste...</span>
-                    </div>
-                </div>
-
                 <!-- Achievements -->
                 <div x-show="achievements.length > 0">
                     <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-trophy text-yellow-400"></i> Achievements</h3>
@@ -649,33 +648,6 @@
                                 <p class="text-[10px] text-white/40 mt-0.5" x-text="a.unlocked ? a.unlocked_by.join(', ') : 'Locked'"></p>
                             </div>
                         </template>
-                    </div>
-                </div>
-
-                <!-- Head to Head -->
-                <div x-show="headToHead.user1">
-                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-swords text-orange-400"></i> Head to Head</h3>
-                    <div class="glass rounded-xl p-4 space-y-3">
-                        <div class="flex items-center justify-between">
-                            <div class="text-center flex-1">
-                                <div class="w-10 h-10 mx-auto rounded-full bg-gradient-to-br from-accent-purple to-accent-blue flex items-center justify-center font-bold" x-text="(headToHead.user1 || '').charAt(0).toUpperCase()"></div>
-                                <p class="text-xs font-medium mt-1" x-text="headToHead.user1"></p>
-                            </div>
-                            <span class="text-white/20 text-lg font-bold px-3">vs</span>
-                            <div class="text-center flex-1">
-                                <div class="w-10 h-10 mx-auto rounded-full bg-gradient-to-br from-pink-500 to-orange-400 flex items-center justify-center font-bold" x-text="(headToHead.user2 || '').charAt(0).toUpperCase()"></div>
-                                <p class="text-xs font-medium mt-1" x-text="headToHead.user2"></p>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-3 gap-2 text-center text-xs">
-                            <div class="glass rounded-lg p-2"><p class="text-lg font-bold text-accent-purple" x-text="headToHead.user1_songs || 0"></p><p class="text-white/40">songs</p></div>
-                            <div class="glass rounded-lg p-2"><p class="text-lg font-bold text-white/60" x-text="(headToHead.shared_artists || []).length"></p><p class="text-white/40">shared</p></div>
-                            <div class="glass rounded-lg p-2"><p class="text-lg font-bold text-pink-400" x-text="headToHead.user2_songs || 0"></p><p class="text-white/40">songs</p></div>
-                        </div>
-                        <div x-show="(headToHead.shared_artists || []).length > 0" class="pt-2 border-t border-white/5">
-                            <p class="text-[10px] text-white/40 uppercase mb-1">Artists you both love</p>
-                            <p class="text-xs text-white/60" x-text="(headToHead.shared_artists || []).join(', ')"></p>
-                        </div>
                     </div>
                 </div>
 
