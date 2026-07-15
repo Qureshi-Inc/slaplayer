@@ -714,15 +714,24 @@
             <!-- Social-style comment/reaction bar (fixed at bottom of player) -->
             <div class="flex-shrink-0 border-t border-white/10 glass-strong px-4 py-2.5">
                 <div class="flex items-center gap-2">
-                    <div class="flex gap-1 flex-shrink-0">
-                        <button @click="postReaction('fire')" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors text-base">&#x1F525;</button>
-                        <button @click="postReaction('heart')" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors text-base">&#x2764;&#xFE0F;</button>
-                        <button @click="postReaction('hundred')" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors text-base">&#x1F4AF;</button>
-                        <button @click="postReaction('thumbsup')" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors text-base">&#x1F44D;</button>
-                        <button @click="postReaction('thumbsdown')" class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors text-base">&#x1F44E;</button>
+                    <div class="relative flex-shrink-0">
+                        <button @click="postReaction('fire')"
+                            @touchstart="emojiHoldTimer = setTimeout(() => { showEmojiPicker = true; emojiHoldTimer = null; }, 400)"
+                            @touchend="if (emojiHoldTimer) { clearTimeout(emojiHoldTimer); emojiHoldTimer = null; }"
+                            @mousedown="emojiHoldTimer = setTimeout(() => { showEmojiPicker = true; emojiHoldTimer = null; }, 400)"
+                            @mouseup="if (emojiHoldTimer) { clearTimeout(emojiHoldTimer); emojiHoldTimer = null; }"
+                            class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors text-lg">&#x1F525;</button>
+                        <div x-show="showEmojiPicker" x-cloak @click.outside="showEmojiPicker = false"
+                            class="absolute bottom-full left-0 mb-2 flex gap-1 p-2 rounded-xl glass-strong border border-white/10 shadow-lg">
+                            <button @click="postReaction('fire'); showEmojiPicker = false" class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-lg">&#x1F525;</button>
+                            <button @click="postReaction('heart'); showEmojiPicker = false" class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-lg">&#x2764;&#xFE0F;</button>
+                            <button @click="postReaction('hundred'); showEmojiPicker = false" class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-lg">&#x1F4AF;</button>
+                            <button @click="postReaction('thumbsup'); showEmojiPicker = false" class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-lg">&#x1F44D;</button>
+                            <button @click="postReaction('thumbsdown'); showEmojiPicker = false" class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-lg">&#x1F44E;</button>
+                        </div>
                     </div>
                     <input x-model="newComment" @keyup.enter="postComment()" placeholder="Add a comment..."
-                        class="flex-1 px-3 py-2 bg-dark-700 rounded-full text-sm border border-white/5 focus:outline-none focus:border-accent-purple/50">
+                        class="flex-1 min-w-0 px-3 py-2 bg-dark-700 rounded-full text-sm border border-white/5 focus:outline-none focus:border-accent-purple/50">
                     <button @click="postComment()" class="w-8 h-8 rounded-full bg-accent-purple flex items-center justify-center hover:bg-accent-purple/80 transition-colors flex-shrink-0">
                         <i class="fas fa-paper-plane text-xs"></i>
                     </button>
@@ -800,7 +809,7 @@ function app() {
 
         searchQuery: '', sortBy: 'dateAdded', sortOrder: 'desc',
         thumbs: {}, comments: {}, skipHistory: {},
-        newComment: '',
+        newComment: '', showEmojiPicker: false, emojiHoldTimer: null,
         editForm: { id: '', title: '', artist: '', album: '', genre: '', year: '' },
         editSaving: false,
 
