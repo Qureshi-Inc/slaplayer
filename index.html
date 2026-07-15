@@ -10,7 +10,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script>
         tailwind.config = {
@@ -52,6 +51,9 @@
     </style>
 </head>
 <body class="h-full text-white overflow-hidden select-none" x-data="app()" x-init="init()">
+
+<!-- Global Audio Element -->
+<audio id="globalAudio" preload="auto"></audio>
 
 <!-- Login -->
 <div x-show="!authenticated" x-transition class="flex items-center justify-center h-full">
@@ -745,9 +747,13 @@
             <div class="flex-1 overflow-y-auto scrollbar-thin px-6">
                 <!-- Album Art -->
                 <div class="flex items-center justify-center py-4">
-                    <div class="w-full max-w-[240px] aspect-square rounded-2xl bg-dark-600 overflow-hidden" :class="isPlaying ? 'album-glow' : ''">
+                    <div class="w-full max-w-[240px] aspect-square rounded-2xl bg-dark-600 overflow-hidden relative" :class="isPlaying ? 'album-glow' : ''">
                         <img x-show="currentTrack?.albumArt" :src="currentTrack?.albumArt" class="w-full h-full object-cover">
                         <div x-show="!currentTrack?.albumArt" class="w-full h-full flex items-center justify-center"><i class="fas fa-music text-4xl text-white/20"></i></div>
+                        <!-- Buffering indicator -->
+                        <div x-show="isBuffering" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                            <i class="fas fa-spinner fa-spin text-3xl text-accent-purple"></i>
+                        </div>
                     </div>
                 </div>
                 <!-- Track Info -->
@@ -764,13 +770,15 @@
                 </div>
                 <!-- Controls -->
                 <div class="flex items-center justify-center gap-6 mt-3 mb-4">
-                    <button @click="toggleShuffle()" :class="shuffle ? 'text-accent-purple' : 'text-white/30 hover:text-white/60'" class="p-2 transition-colors"><i class="fas fa-shuffle"></i></button>
+                    <button @click="toggleShuffle()" :class="shuffle ? 'text-accent-purple' : 'text-white/30 hover:text-white/60'" class="p-2 transition-colors" title="Shuffle"><i class="fas fa-shuffle"></i></button>
+                    <button @click="seekBy(-10)" class="p-2 text-white/50 hover:text-white transition-colors" title="Seek -10s"><i class="fas fa-backward text-lg"></i></button>
                     <button @click="playPrev()" class="p-2 text-white/70 hover:text-white transition-colors"><i class="fas fa-backward-step text-xl"></i></button>
                     <button @click="togglePlay()" class="w-14 h-14 rounded-full bg-white flex items-center justify-center text-dark-900 hover:scale-105 transition-transform">
                         <i :class="isPlaying ? 'fas fa-pause' : 'fas fa-play'" class="text-xl" :style="!isPlaying ? 'margin-left:3px' : ''"></i>
                     </button>
                     <button @click="playNext()" class="p-2 text-white/70 hover:text-white transition-colors"><i class="fas fa-forward-step text-xl"></i></button>
-                    <button @click="toggleRepeat()" :class="repeat !== 'off' ? 'text-accent-purple' : 'text-white/30 hover:text-white/60'" class="p-2 transition-colors relative">
+                    <button @click="seekBy(10)" class="p-2 text-white/50 hover:text-white transition-colors" title="Seek +10s"><i class="fas fa-forward text-lg"></i></button>
+                    <button @click="toggleRepeat()" :class="repeat !== 'off' ? 'text-accent-purple' : 'text-white/30 hover:text-white/60'" class="p-2 transition-colors relative" title="Repeat">
                         <i class="fas fa-repeat"></i>
                         <span x-show="repeat === 'one'" class="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] font-bold text-accent-purple">1</span>
                     </button>
@@ -878,9 +886,9 @@ function app() {
         loading: true, toast: '',
         librarySubTab: 'songs', selectedAlbum: null, selectedArtist: null, selectedGenre: null,
 
-        currentTrack: null, isPlaying: false, currentTime: 0, duration: 0,
+        currentTrack: null, isPlaying: false, isBuffering: false, currentTime: 0, duration: 0,
         volume: 0.8, previousVolume: 0.8, shuffle: false, repeat: 'off',
-        howl: null, progressInterval: null, playStartTime: 0,
+        audio: null, playStartTime: 0, playHistory: [], persistInterval: null,
 
         library: [], filteredLibrary: [], recentTracks: [], hotTracks: [], _hotRaw: [],
         leaderboard: [], topArtists: [], playlists: [],
@@ -902,6 +910,12 @@ function app() {
         get unreadCount() { return this.notifications.filter(n => !n.read).length; },
 
         async init() {
+            // Set up audio element
+            this.audio = document.getElementById('globalAudio');
+            this.setupAudioEvents();
+            this.setupKeyboardShortcuts();
+            this.setupMediaSession();
+
             const session = localStorage.getItem('slaplayer_session');
             if (session) {
                 const s = JSON.parse(session);
@@ -913,6 +927,9 @@ function app() {
                 this.loginForm.username = s.username;
                 this.authenticated = true;
                 await this.loadApp();
+
+                // Restore playback state after library loads
+                this.restorePlaybackState();
             }
             if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
         },
@@ -940,7 +957,16 @@ function app() {
             this.loginLoading = false;
         },
 
-        logout() { localStorage.removeItem('slaplayer_session'); this.authenticated = false; this.jellyfinToken = ''; if (this.howl) this.howl.unload(); },
+        logout() {
+            localStorage.removeItem('slaplayer_session');
+            this.authenticated = false;
+            this.jellyfinToken = '';
+            if (this.audio) {
+                this.audio.pause();
+                this.audio.src = '';
+            }
+            if (this.persistInterval) clearInterval(this.persistInterval);
+        },
 
         async loadApp() {
             this.thumbs = JSON.parse(localStorage.getItem('slaplayer_thumbs') || '{}');
@@ -1130,26 +1156,46 @@ function app() {
 
         playTrack(track) {
             if (!track || !track.id) return;
-            if (this.howl) { this.recordSkip(); this.howl.unload(); }
-            if (this.progressInterval) clearInterval(this.progressInterval);
+            if (this.currentTrack) this.recordSkip();
+
             this.currentTrack = track;
             this.currentTime = 0;
             this.duration = track.duration || 0;
             this.playStartTime = Date.now();
-            this.howl = new Howl({
-                src: [track.streamUrl], html5: true, volume: this.volume,
-                onplay: () => { this.isPlaying = true; this.duration = this.howl.duration() || track.duration || 0; this.startProgress(); },
-                onpause: () => { this.isPlaying = false; },
-                onend: () => { this.isPlaying = false; this.currentTime = 0; this.reportPlayEvent(true); this.autoNext(); },
-                onloaderror: () => {}, onplayerror: () => {},
+
+            // Add to history (keep last 50)
+            this.playHistory.push({ id: track.id, timestamp: Date.now() });
+            if (this.playHistory.length > 50) this.playHistory.shift();
+
+            // Generate fresh stream URL
+            const streamUrl = `${this.jellyfinUrl}/Audio/${track.id}/universal?UserId=${this.userId}&api_key=${this.jellyfinToken}&AudioCodec=mp3&MaxStreamingBitrate=320000`;
+
+            // Set audio source and play
+            this.audio.src = streamUrl;
+            this.audio.volume = this.volume;
+            this.audio.play().catch(err => {
+                console.error('Playback failed:', err);
+                this.isPlaying = false;
             });
-            this.howl.play();
+
+            // Update Media Session metadata
+            this.updateMediaSession();
+
+            // Save state
+            this.savePlaybackState();
         },
 
         togglePlay() {
-            if (!this.howl && this.currentTrack) { this.playTrack(this.currentTrack); return; }
-            if (!this.howl) { if (this.library.length) this.playTrack(this.library[0]); return; }
-            if (this.isPlaying) this.howl.pause(); else this.howl.play();
+            if (!this.audio) return;
+            if (!this.currentTrack) {
+                if (this.library.length) this.playTrack(this.library[0]);
+                return;
+            }
+            if (this.isPlaying) {
+                this.audio.pause();
+            } else {
+                this.audio.play().catch(err => console.error('Play failed:', err));
+            }
         },
 
         autoNext() {
@@ -1183,22 +1229,226 @@ function app() {
 
         playPrev() {
             if (!this.currentTrack || !this.library.length) return;
-            if (this.currentTime > 3) { this.seek(0); return; }
+            // If more than 5 seconds in, restart current track
+            if (this.currentTime > 5) { this.seek(0); return; }
+            // Otherwise go to previous track
             const ci = this.library.findIndex(t => t.id === this.currentTrack.id);
             this.playTrack(this.library[ci <= 0 ? this.library.length - 1 : ci - 1]);
         },
 
-        seek(val) { if (this.howl) { this.howl.seek(parseFloat(val)); this.currentTime = parseFloat(val); } },
-        setVolume(val) { this.volume = parseFloat(val); if (this.howl) this.howl.volume(this.volume); },
-        toggleMute() { if (this.volume > 0) { this.previousVolume = this.volume; this.setVolume(0); } else this.setVolume(this.previousVolume || 0.8); },
-        toggleShuffle() { this.shuffle = !this.shuffle; },
-        toggleRepeat() { this.repeat = this.repeat === 'off' ? 'all' : this.repeat === 'all' ? 'one' : 'off'; },
+        seek(val) {
+            if (!this.audio) return;
+            const time = Math.max(0, Math.min(parseFloat(val), this.duration));
+            this.audio.currentTime = time;
+            this.currentTime = time;
+        },
+        seekBy(delta) {
+            if (!this.audio) return;
+            this.seek(this.currentTime + delta);
+        },
+        setVolume(val) {
+            this.volume = Math.max(0, Math.min(1, parseFloat(val)));
+            if (this.audio) this.audio.volume = this.volume;
+        },
+        toggleMute() {
+            if (this.volume > 0) {
+                this.previousVolume = this.volume;
+                this.setVolume(0);
+            } else {
+                this.setVolume(this.previousVolume || 0.8);
+            }
+        },
+        toggleShuffle() {
+            this.shuffle = !this.shuffle;
+            this.showToast(this.shuffle ? 'Shuffle on' : 'Shuffle off');
+            this.savePlaybackState();
+        },
+        toggleRepeat() {
+            this.repeat = this.repeat === 'off' ? 'all' : this.repeat === 'all' ? 'one' : 'off';
+            const msg = this.repeat === 'off' ? 'Repeat off' : this.repeat === 'all' ? 'Repeat all' : 'Repeat one';
+            this.showToast(msg);
+            this.savePlaybackState();
+        },
 
-        startProgress() {
-            if (this.progressInterval) clearInterval(this.progressInterval);
-            this.progressInterval = setInterval(() => {
-                if (this.howl && this.isPlaying) { this.currentTime = this.howl.seek() || 0; const d = this.howl.duration(); if (d > 0) this.duration = d; }
-            }, 400);
+        setupAudioEvents() {
+            if (!this.audio) return;
+
+            this.audio.addEventListener('loadedmetadata', () => {
+                if (this.audio.duration && !isNaN(this.audio.duration)) {
+                    this.duration = this.audio.duration;
+                }
+            });
+
+            this.audio.addEventListener('timeupdate', () => {
+                if (this.audio.currentTime && !isNaN(this.audio.currentTime)) {
+                    this.currentTime = this.audio.currentTime;
+                }
+            });
+
+            this.audio.addEventListener('durationchange', () => {
+                if (this.audio.duration && !isNaN(this.audio.duration)) {
+                    this.duration = this.audio.duration;
+                }
+            });
+
+            this.audio.addEventListener('play', () => {
+                this.isPlaying = true;
+                this.isBuffering = false;
+                this.updateMediaSessionState();
+            });
+
+            this.audio.addEventListener('pause', () => {
+                this.isPlaying = false;
+                this.updateMediaSessionState();
+                this.savePlaybackState();
+            });
+
+            this.audio.addEventListener('waiting', () => {
+                this.isBuffering = true;
+            });
+
+            this.audio.addEventListener('canplay', () => {
+                this.isBuffering = false;
+            });
+
+            this.audio.addEventListener('ended', () => {
+                this.isPlaying = false;
+                this.currentTime = 0;
+                this.reportPlayEvent(true);
+                this.autoNext();
+            });
+
+            this.audio.addEventListener('error', (e) => {
+                console.error('Audio error:', e);
+                this.isPlaying = false;
+                this.isBuffering = false;
+                this.showToast('Playback error');
+            });
+
+            // Start persistence interval (save every 30s while playing)
+            this.persistInterval = setInterval(() => {
+                if (this.isPlaying && this.currentTrack) {
+                    this.savePlaybackState();
+                }
+            }, 30000);
+        },
+
+        setupMediaSession() {
+            if (!('mediaSession' in navigator)) return;
+
+            navigator.mediaSession.setActionHandler('play', () => this.togglePlay());
+            navigator.mediaSession.setActionHandler('pause', () => this.togglePlay());
+            navigator.mediaSession.setActionHandler('previoustrack', () => this.playPrev());
+            navigator.mediaSession.setActionHandler('nexttrack', () => this.playNext());
+            navigator.mediaSession.setActionHandler('seekbackward', () => this.seekBy(-10));
+            navigator.mediaSession.setActionHandler('seekforward', () => this.seekBy(10));
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
+                if (details.seekTime) this.seek(details.seekTime);
+            });
+        },
+
+        updateMediaSession() {
+            if (!('mediaSession' in navigator) || !this.currentTrack) return;
+
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: this.currentTrack.title || 'Unknown Track',
+                artist: this.currentTrack.artist || 'Unknown Artist',
+                album: this.currentTrack.album || '',
+                artwork: this.currentTrack.albumArt ? [
+                    { src: this.currentTrack.albumArt, sizes: '300x300', type: 'image/jpeg' },
+                    { src: this.currentTrack.albumArt, sizes: '512x512', type: 'image/jpeg' }
+                ] : []
+            });
+
+            this.updateMediaSessionState();
+        },
+
+        updateMediaSessionState() {
+            if (!('mediaSession' in navigator)) return;
+            navigator.mediaSession.playbackState = this.isPlaying ? 'playing' : 'paused';
+        },
+
+        setupKeyboardShortcuts() {
+            // Mobile app - skip keyboard shortcuts
+        },
+
+        savePlaybackState() {
+            if (!this.currentTrack) return;
+
+            const state = {
+                version: 1,
+                timestamp: Date.now(),
+                trackId: this.currentTrack.id,
+                position: this.currentTime,
+                volume: this.volume,
+                shuffle: this.shuffle,
+                repeat: this.repeat,
+                queueIds: [
+                    ...this.manualQueue.map(t => t.id),
+                    ...this.contextQueue.map(t => t.id)
+                ],
+                manualQueueLength: this.manualQueue.length
+            };
+
+            localStorage.setItem('slaplayer_playback', JSON.stringify(state));
+        },
+
+        restorePlaybackState() {
+            const saved = localStorage.getItem('slaplayer_playback');
+            if (!saved) return;
+
+            try {
+                const state = JSON.parse(saved);
+
+                // Check if saved state is less than 24 hours old
+                if (Date.now() - state.timestamp > 24 * 60 * 60 * 1000) {
+                    localStorage.removeItem('slaplayer_playback');
+                    return;
+                }
+
+                // Restore settings
+                this.volume = state.volume || 0.8;
+                this.shuffle = state.shuffle || false;
+                this.repeat = state.repeat || 'off';
+                if (this.audio) this.audio.volume = this.volume;
+
+                // Find the track in library
+                const track = this.library.find(t => t.id === state.trackId);
+                if (!track) return;
+
+                // Restore queue
+                if (state.queueIds && state.queueIds.length > 0) {
+                    const queueTracks = state.queueIds
+                        .map(id => this.library.find(t => t.id === id))
+                        .filter(t => t);
+
+                    const manualLen = state.manualQueueLength || 0;
+                    this.manualQueue = queueTracks.slice(0, manualLen);
+                    this.contextQueue = queueTracks.slice(manualLen);
+                }
+
+                // Set current track but don't autoplay
+                this.currentTrack = track;
+                this.duration = track.duration || 0;
+
+                // Generate fresh stream URL
+                const streamUrl = `${this.jellyfinUrl}/Audio/${track.id}/universal?UserId=${this.userId}&api_key=${this.jellyfinToken}&AudioCodec=mp3&MaxStreamingBitrate=320000`;
+                this.audio.src = streamUrl;
+
+                // Restore position when metadata loads
+                if (state.position) {
+                    this.audio.addEventListener('loadedmetadata', () => {
+                        this.audio.currentTime = state.position;
+                        this.currentTime = state.position;
+                    }, { once: true });
+                }
+
+                this.updateMediaSession();
+                this.showToast('Queue restored');
+            } catch (e) {
+                console.error('Failed to restore playback state:', e);
+                localStorage.removeItem('slaplayer_playback');
+            }
         },
 
         recordSkip() {
