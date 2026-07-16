@@ -216,6 +216,53 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- AI Playlist of the Week -->
+                <div x-show="weeklyPlaylist && weeklyTracks.length" x-cloak>
+                    <h3 class="text-base font-semibold mb-3 flex items-center gap-2"><i class="fas fa-wand-magic-sparkles text-accent-purple"></i> AI Playlist of the Week</h3>
+                    <div class="glass rounded-2xl p-5 relative overflow-hidden">
+                        <div class="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-blue-500/10"></div>
+                        <div class="relative">
+                            <div class="flex items-start justify-between gap-3 flex-wrap">
+                                <div class="min-w-0">
+                                    <h2 class="text-xl font-bold truncate" x-text="weeklyPlaylist.name"></h2>
+                                    <p class="text-accent-purple text-[11px] uppercase tracking-wider">Curated by AI · refreshes weekly</p>
+                                </div>
+                                <div class="flex items-center gap-2 flex-shrink-0">
+                                    <button @click="weeklyTracks.length && playFromList(weeklyTracks[0], weeklyTracks)"
+                                        class="px-4 py-2 rounded-full bg-accent-purple text-sm font-semibold hover:bg-accent-purple/80 transition-colors flex items-center gap-2">
+                                        <i class="fas fa-play text-xs"></i> Play all
+                                    </button>
+                                    <button @click="saveWeeklyPlaylist()" :disabled="savingWeekly"
+                                        class="px-4 py-2 rounded-full bg-accent-pink/20 text-accent-pink text-sm font-semibold hover:bg-accent-pink/30 transition-colors flex items-center gap-2 disabled:opacity-50">
+                                        <i class="fas" :class="savingWeekly ? 'fa-spinner fa-spin' : 'fa-bookmark'"></i>
+                                        <span x-text="savingWeekly ? 'Saving...' : 'Save'"></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="text-white/60 text-sm mt-2" x-text="weeklyPlaylist.description"></p>
+                            <p x-show="weeklySavedMsg" class="text-xs text-white/50 mt-2" x-text="weeklySavedMsg"></p>
+                            <div class="mt-4 space-y-1">
+                                <template x-for="(track, i) in weeklyTracks" :key="'wk-' + (track.id || i)">
+                                    <div class="glass-hover rounded-lg p-2.5 flex items-center gap-3 cursor-pointer transition-all border border-transparent"
+                                        :class="currentTrack && currentTrack.id === track.id ? 'border-accent-purple/20 bg-accent-purple/5' : ''"
+                                        @click="playFromList(track, weeklyTracks)">
+                                        <span class="text-[11px] text-white/30 w-5 text-center flex-shrink-0" x-text="i + 1"></span>
+                                        <div class="w-9 h-9 rounded bg-dark-600 flex-shrink-0 overflow-hidden">
+                                            <img x-show="track.albumArt" :src="track.albumArt" class="w-full h-full object-cover" loading="lazy">
+                                            <div x-show="!track.albumArt" class="w-full h-full flex items-center justify-center"><i class="fas fa-music text-white/20 text-xs"></i></div>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm font-medium truncate" x-text="track.title"></p>
+                                            <p class="text-xs text-white/40 truncate" x-text="track.artist"></p>
+                                        </div>
+                                        <i class="fas fa-play text-accent-purple text-xs"></i>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Library -->
@@ -1098,6 +1145,7 @@ function app() {
         manualQueue: [], contextQueue: [],
         notifications: [], selectedUser: null,
         nowListening: [], aiDigest: { digest: '', highlights: [], vibe_shift: '' },
+        weeklyPlaylist: null, weeklyTracks: [], savingWeekly: false, weeklySavedMsg: '',
         tasteDNA: {}, tasteDNALoading: false, achievements: [], headToHead: {},
         socialStats: {}, socialStreaks: [], socialPersonalities: [], hallOfFame: [], trackPlayCount: 0,
         activityFeed: [], showActivityDetail: false, activityDetailTrack: null, mentionSuggestions: [], activityReply: '',
@@ -1186,9 +1234,40 @@ function app() {
             this.generateVibe();
             this.generateNotifications();
             this.loadSocialData();
+            this.loadWeeklyPlaylist();
             this.loadActivityFeed();
             this.requestNotificationPermission();
             this.startActivityPolling();
+        },
+
+        async loadWeeklyPlaylist() {
+            try {
+                const res = await fetch('https://slap.qureshi.io/api/v1/dashboard/ai/weekly-playlist');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data.tracks || !data.tracks.length) return;
+                this.weeklyPlaylist = data;
+                // Match each pick to a library track (for albumArt + reliable playback);
+                // fall back to a minimal track object if not in the local library.
+                this.weeklyTracks = data.tracks.map(t => {
+                    const match = t.track_id ? this.library.find(l => l.id === t.track_id) : null;
+                    return match || { id: t.track_id, title: t.title, artist: t.artist, albumArt: '' };
+                }).filter(t => t.id);
+            } catch (e) {}
+        },
+
+        async saveWeeklyPlaylist() {
+            if (this.savingWeekly) return;
+            this.savingWeekly = true; this.weeklySavedMsg = '';
+            try {
+                const res = await fetch('https://slap.qureshi.io/api/v1/dashboard/ai/weekly-playlist/save', { method: 'POST' });
+                const data = res.ok ? await res.json() : null;
+                this.weeklySavedMsg = data ? `Saved ${data.saved} songs to your library ✓` : 'Couldn\'t save — try again';
+                if (data && data.jellyfin_playlist_id) this.loadPlaylists();
+            } catch (e) {
+                this.weeklySavedMsg = 'Couldn\'t save — try again';
+            }
+            this.savingWeekly = false;
         },
 
         async loadSlaptasticData() {
