@@ -1424,9 +1424,14 @@ function app() {
 
         async reportPlayEvent(completed = false) {
             if (!this.currentTrack || !this.username || this.hadPlaybackError) return;
-            const elapsed = Math.round((Date.now() - this.playStartTime) / 1000);
-            // Only count as play if listened > 30 seconds
-            if (elapsed < 30) return;
+            // Guard: playStartTime must be a valid timestamp for this play session
+            if (!this.playStartTime || this.playStartTime <= 0) return;
+            let elapsed = Math.round((Date.now() - this.playStartTime) / 1000);
+            // Clamp to the track's real duration — never report more than the song length
+            const dur = Math.round(this.duration || 0);
+            if (dur > 0 && elapsed > dur) elapsed = dur;
+            // Only count as play if listened > 30 seconds and value is sane
+            if (elapsed < 30 || elapsed > 86400) return;
             const API = 'https://slap.qureshi.io/api/v1/listening';
             try {
                 await fetch(`${API}/play`, {
@@ -2013,8 +2018,17 @@ function app() {
         addToQueue(track) { this.manualQueue.push({...track}); this.showToast('Added to queue'); },
 
         // Thumbs
-        thumbUp(track) { if (!track) return; this.thumbs[track.id] = this.thumbs[track.id] === 1 ? 0 : 1; localStorage.setItem('slaplayer_thumbs', JSON.stringify(this.thumbs)); },
-        thumbDown(track) { if (!track) return; this.thumbs[track.id] = this.thumbs[track.id] === -1 ? 0 : -1; localStorage.setItem('slaplayer_thumbs', JSON.stringify(this.thumbs)); },
+        thumbUp(track) { if (!track) return; this.thumbs[track.id] = this.thumbs[track.id] === 1 ? 0 : 1; localStorage.setItem('slaplayer_thumbs', JSON.stringify(this.thumbs)); this.sendThumb(track, this.thumbs[track.id]); },
+        thumbDown(track) { if (!track) return; this.thumbs[track.id] = this.thumbs[track.id] === -1 ? 0 : -1; localStorage.setItem('slaplayer_thumbs', JSON.stringify(this.thumbs)); this.sendThumb(track, this.thumbs[track.id]); },
+        async sendThumb(track, value) {
+            if (!this.username) return;
+            try {
+                await fetch('https://slap.qureshi.io/api/v1/listening/thumb', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: this.username, track_id: track.id, title: track.title || '', artist: track.artist || '', thumbs: value }),
+                });
+            } catch (e) {}
+        },
         getThumb(track) { return track ? (this.thumbs[track.id] || 0) : 0; },
 
         // Comments
