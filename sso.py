@@ -15,7 +15,7 @@ their account.
 Stdlib only. Env:
   ZITADEL_ISSUER       https://auth.crcmz.me
   ZITADEL_CLIENT_ID    the SlapPlayer OIDC app (PKCE, no secret)
-  PUBLIC_URL           https://play.qureshi.io
+  PUBLIC_URL           https://slaplayer.crcmz.me
   JELLYFIN_URL         Jellyfin as this container reaches it (http://jellyfin:8096)
   JELLYFIN_PUBLIC_URL  Jellyfin as the browser reaches it (https://jelly.qureshi.io)
   JELLYFIN_TOKEN       Jellyfin admin API key
@@ -38,7 +38,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ISSUER = os.environ.get("ZITADEL_ISSUER", "https://auth.crcmz.me").rstrip("/")
 CLIENT_ID = os.environ.get("ZITADEL_CLIENT_ID", "")
-PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://play.qureshi.io").rstrip("/")
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://slaplayer.crcmz.me").rstrip("/")
 JF = os.environ.get("JELLYFIN_URL", "http://jellyfin:8096").rstrip("/")
 JF_PUBLIC = os.environ.get("JELLYFIN_PUBLIC_URL", "https://jelly.qureshi.io").rstrip("/")
 JF_TOKEN = os.environ.get("JELLYFIN_TOKEN", "")
