@@ -80,7 +80,8 @@ def unsign(value: str) -> dict | None:
 def http(method: str, url: str, *, headers: dict | None = None, form: dict | None = None,
          body: dict | None = None) -> tuple[int, dict | str]:
     data = None
-    headers = dict(headers or {})
+    # Cloudflare in front of auth.crcmz.me bans the default Python-urllib agent (error 1010).
+    headers = {"User-Agent": "SlapPlayer-SSO/1.0", **(headers or {})}
     if form is not None:
         data = urllib.parse.urlencode(form).encode()
         headers["Content-Type"] = "application/x-www-form-urlencoded"
