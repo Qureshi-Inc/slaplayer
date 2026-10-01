@@ -1131,7 +1131,7 @@
 function app() {
     return {
         authenticated: false,
-        loginForm: { serverUrl: 'https://jelly.qureshi.io', username: '', password: '' },
+        loginForm: { serverUrl: 'https://jellyfin.crcmz.me', username: '', password: '' },
         loginError: '', loginLoading: false,
         jellyfinUrl: '', jellyfinToken: '', userId: '', username: '',
 
@@ -1179,6 +1179,11 @@ function app() {
             const session = localStorage.getItem('slaplayer_session');
             if (session) {
                 const s = JSON.parse(session);
+                // The server moved; the same tokens work on the new name.
+                if (/^https?:\/\/jelly\.qureshi\.io\/?$/i.test(s.serverUrl || '')) {
+                    s.serverUrl = 'https://jellyfin.crcmz.me';
+                    localStorage.setItem('slaplayer_session', JSON.stringify(s));
+                }
                 this.jellyfinUrl = s.serverUrl;
                 this.jellyfinToken = s.token;
                 this.username = s.username;
