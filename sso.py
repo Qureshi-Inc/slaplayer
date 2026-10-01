@@ -108,7 +108,7 @@ class Refused(Exception):
 
 # ── Zitadel ─────────────────────────────────────────────────────────────────
 def zitadel_person(code: str, verifier: str) -> tuple[str, str]:
-    """Code -> (display name, jellyfin_user tag or '')."""
+    """Code -> (display name, raw jellyfin_user tag or '')."""
     s, tok = http("POST", f"{ISSUER}/oauth/v2/token", form={
         "grant_type": "authorization_code", "code": code, "redirect_uri": REDIRECT_URI,
         "client_id": CLIENT_ID, "code_verifier": verifier,
@@ -132,24 +132,37 @@ def zitadel_person(code: str, verifier: str) -> tuple[str, str]:
             raw = next((m.get("value") or "" for m in meta.get("result") or [] if m.get("key") == TAG), "")
         else:
             log.warning("metadata search failed: %s", s)
-    try:
-        tag = base64.b64decode(raw).decode().strip() if raw else ""
-    except ValueError:
-        tag = ""
-    return name, tag
+    return name, raw
 
 
 # ── Jellyfin ────────────────────────────────────────────────────────────────
-def jellyfin_login(jf_name: str) -> dict:
+def tag_readings(raw: str) -> list[str]:
+    """Ways to read a metadata value: Zitadel base64-encodes it, but a short
+    plain name like "moiz" is itself valid base64, so keep the literal too."""
+    out, v = [], (raw or "").strip()
+    for _ in range(3):
+        if v and v not in out:
+            out.append(v)
+        try:
+            v = base64.b64decode(v, validate=True).decode("utf-8").strip()
+        except (ValueError, UnicodeDecodeError):
+            break
+    return out
+
+
+def jellyfin_login(raw_tag: str) -> dict:
     """Admin-approved Quick Connect for one user -> that user's own token."""
     admin = {"X-Emby-Token": JF_TOKEN}
     s, users = http("GET", f"{JF}/Users", headers=admin)
     if s != 200 or not isinstance(users, list):
         log.warning("jellyfin users failed: %s", s)
         raise Refused("The music server isn't answering. Try again in a minute.")
-    user = next((u for u in users if (u.get("Name") or "").casefold() == jf_name.casefold()), None)
+    by_name = {(u.get("Name") or "").casefold(): u for u in users}
+    readings = tag_readings(raw_tag)
+    user = next((by_name[r.casefold()] for r in readings if r.casefold() in by_name), None)
     if not user:
-        raise Refused(f"Your CRCMZ account points at a music account ({jf_name}) that doesn't exist. Ask an admin.")
+        log.warning("jellyfin_user tag matched no Jellyfin user (%d readings)", len(readings))
+        raise Refused("Your CRCMZ account points at a music account that doesn't exist. Ask an admin.")
     if (user.get("Policy") or {}).get("IsDisabled"):
         raise Refused("Your music account is turned off. Ask an admin.")
 
