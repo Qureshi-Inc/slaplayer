@@ -73,17 +73,17 @@
         <div class="space-y-4">
             <div>
                 <label class="text-xs text-white/50 block mb-1">Server URL</label>
-                <input x-model="loginForm.serverUrl" type="url" placeholder="https://jelly.qureshi.io"
+                <input x-model="loginForm.serverUrl" type="url"
                     class="w-full px-4 py-3 bg-dark-700 rounded-xl border border-white/10 focus:border-accent-purple focus:outline-none text-sm">
             </div>
             <div>
                 <label class="text-xs text-white/50 block mb-1">Username</label>
-                <input x-model="loginForm.username" type="text" placeholder="moiz"
+                <input x-model="loginForm.username" type="text" autocomplete="username"
                     class="w-full px-4 py-3 bg-dark-700 rounded-xl border border-white/10 focus:border-accent-purple focus:outline-none text-sm">
             </div>
             <div>
                 <label class="text-xs text-white/50 block mb-1">Password</label>
-                <input x-model="loginForm.password" type="password" placeholder="••••••••" @keyup.enter="login()"
+                <input x-model="loginForm.password" type="password" autocomplete="current-password" @keyup.enter="login()"
                     class="w-full px-4 py-3 bg-dark-700 rounded-xl border border-white/10 focus:border-accent-purple focus:outline-none text-sm">
             </div>
             <p x-show="loginError" class="text-red-400 text-xs" x-text="loginError"></p>
@@ -1131,7 +1131,7 @@
 function app() {
     return {
         authenticated: false,
-        loginForm: { serverUrl: '', username: '', password: '' },
+        loginForm: { serverUrl: 'https://jelly.qureshi.io', username: '', password: '' },
         loginError: '', loginLoading: false,
         jellyfinUrl: '', jellyfinToken: '', userId: '', username: '',
 
