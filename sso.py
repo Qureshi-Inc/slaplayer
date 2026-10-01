@@ -45,7 +45,8 @@ JF_TOKEN = os.environ.get("JELLYFIN_TOKEN", "")
 SECRET = (os.environ.get("SSO_SECRET") or secrets.token_hex(32)).encode()
 
 REDIRECT_URI = f"{PUBLIC_URL}/auth/callback"
-SCOPES = "openid profile urn:zitadel:iam:user:metadata"
+# The zitadel audience lets the same token read the user's own metadata from the auth API.
+SCOPES = "openid profile urn:zitadel:iam:user:metadata urn:zitadel:iam:org:project:id:zitadel:aud"
 TAG = "jellyfin_user"
 COOKIE = "slap_sso"
 COOKIE_TTL = 600
@@ -122,6 +123,15 @@ def zitadel_person(code: str, verifier: str) -> tuple[str, str]:
         raise Refused("CRCMZ didn't say who you are. Try again.")
     name = info.get("preferred_username") or info.get("name") or "you"
     raw = (info.get("urn:zitadel:iam:user:metadata") or {}).get(TAG) or ""
+    if not raw:
+        # Not every Zitadel setup puts metadata in userinfo; ask for it directly.
+        log.info("userinfo had no %s (claims: %s); asking the auth API", TAG, ",".join(sorted(info)))
+        s, meta = http("POST", f"{ISSUER}/auth/v1/users/me/metadata/_search",
+                       headers={"Authorization": f"Bearer {tok['access_token']}"}, body={})
+        if s == 200 and isinstance(meta, dict):
+            raw = next((m.get("value") or "" for m in meta.get("result") or [] if m.get("key") == TAG), "")
+        else:
+            log.warning("metadata search failed: %s", s)
     try:
         tag = base64.b64decode(raw).decode().strip() if raw else ""
     except ValueError:
