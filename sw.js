@@ -15,6 +15,7 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  if (new URL(e.request.url).pathname.startsWith('/auth/')) return;
   if (e.request.url.includes('/Audio/') || e.request.url.includes('/Images/')) return;
   e.respondWith(
     fetch(e.request).then(res => {

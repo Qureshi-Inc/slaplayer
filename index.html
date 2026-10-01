@@ -63,6 +63,13 @@
             <h1 class="text-3xl font-bold gradient-text mb-2">SlapPlayer</h1>
             <p class="text-sm text-white/50">Connect to your Jellyfin server</p>
         </div>
+        <a href="/auth/login"
+            class="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-gradient-to-r from-accent-purple to-accent-blue font-semibold text-sm hover:opacity-90 transition-opacity">
+            <i class="fas fa-right-to-bracket text-sm"></i>Sign in with CRCMZ
+        </a>
+        <div class="flex items-center gap-3 my-6 text-xs text-white/40">
+            <span class="flex-1 h-px bg-white/10"></span>or use your Jellyfin password<span class="flex-1 h-px bg-white/10"></span>
+        </div>
         <div class="space-y-4">
             <div>
                 <label class="text-xs text-white/50 block mb-1">Server URL</label>
@@ -81,7 +88,7 @@
             </div>
             <p x-show="loginError" class="text-red-400 text-xs" x-text="loginError"></p>
             <button @click="login()" :disabled="loginLoading"
-                class="w-full py-3 rounded-xl bg-gradient-to-r from-accent-purple to-accent-blue font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50">
+                class="w-full py-3 rounded-xl border border-white/15 bg-dark-700 font-semibold text-sm hover:border-accent-purple transition-colors disabled:opacity-50">
                 <span x-show="!loginLoading">Connect</span>
                 <span x-show="loginLoading" class="animate-pulse">Connecting...</span>
             </button>
@@ -1211,6 +1218,9 @@ function app() {
         },
 
         logout() {
+            // A CRCMZ sign-in has no password to fall back on, so end its Jellyfin session too.
+            const s = JSON.parse(localStorage.getItem('slaplayer_session') || '{}');
+            if (s.sso && s.token) fetch(`${s.serverUrl}/Sessions/Logout`, { method: 'POST', headers: { 'X-Emby-Token': s.token } }).catch(() => {});
             localStorage.removeItem('slaplayer_session');
             this.authenticated = false;
             this.jellyfinToken = '';
