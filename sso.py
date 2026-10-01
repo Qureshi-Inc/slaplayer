@@ -28,6 +28,7 @@ import html
 import json
 import logging
 import os
+import re
 import secrets
 import time
 import urllib.error
@@ -144,10 +145,18 @@ def tag_readings(raw: str) -> list[str]:
         if v and v not in out:
             out.append(v)
         try:
-            v = base64.b64decode(v, validate=True).decode("utf-8").strip()
+            v = b64any(v).decode("utf-8").strip()
         except (ValueError, UnicodeDecodeError):
             break
     return out
+
+
+def b64any(v: str) -> bytes:
+    """Standard or URL-safe base64, padded or not (userinfo drops the padding)."""
+    if not re.fullmatch(r"[A-Za-z0-9+/_-]+=*", v):
+        raise ValueError("not base64")
+    v = v.rstrip("=").replace("-", "+").replace("_", "/")
+    return base64.b64decode(v + "=" * (-len(v) % 4), validate=True)
 
 
 def jellyfin_login(raw_tag: str) -> dict:
@@ -161,7 +170,8 @@ def jellyfin_login(raw_tag: str) -> dict:
     readings = tag_readings(raw_tag)
     user = next((by_name[r.casefold()] for r in readings if r.casefold() in by_name), None)
     if not user:
-        log.warning("jellyfin_user tag matched no Jellyfin user (%d readings)", len(readings))
+        log.warning("jellyfin_user tag matched no Jellyfin user (%d readings, shapes %s)", len(readings),
+                    [re.sub(r"[A-Za-z]", "a", re.sub(r"[0-9]", "9", r)) for r in readings])
         raise Refused("Your CRCMZ account points at a music account that doesn't exist. Ask an admin.")
     if (user.get("Policy") or {}).get("IsDisabled"):
         raise Refused("Your music account is turned off. Ask an admin.")
